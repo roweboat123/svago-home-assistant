@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+dist/
+*.zip
+*.pcap
+*.pcapng
+*.log
+.env
+.env.*
+!.env.example
+secrets.yaml
+.storage/
+svago-ble-protocol-checkpoint.txt
+DEVELOPMENT_STATUS.md
+Log *.txt
+.DS_Store
+Thumbs.db

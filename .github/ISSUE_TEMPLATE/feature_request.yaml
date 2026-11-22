@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest an improvement to everyday use.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would this help you do?
+      description: Describe the task or difficulty, and the behavior you would prefer.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Related chair behavior
+      description: If this needs a new chair command, describe whether it works on a physical remote and your chair model. Do not include personal Bluetooth addresses.

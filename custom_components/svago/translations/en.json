@@ -1,0 +1,17 @@
+{
+  "title": "Svago Motion Mastery",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your Svago chair",
+        "description": "Confirm the chair is powered on and the Motion Mastery Bluetooth remote is off.",
+        "data": {"address": "Bluetooth address"}
+      }
+    },
+    "error": {
+      "invalid_address": "Enter the chair’s Bluetooth address in the format AA:BB:CC:DD:EE:FF.",
+      "cannot_connect": "{error_detail}"
+    },
+    "abort": {"already_configured": "This chair is already configured."}
+  }
+}

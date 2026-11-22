@@ -1,0 +1,12 @@
+# Use a separate Python >=3.14.2 environment, never install into HAOS manually.
+homeassistant==2026.10.0
+bleak==3.0.2
+bleak-retry-connector==4.7.1
+habluetooth==7.1.2
+dbus-fast==5.0.22
+aiousbwatcher==1.1.2
+serialx==1.11.0
+aiohasupervisor==0.6.0
+pytest==9.2.0
+pytest-asyncio==1.5.0
+ruff==0.17.5

@@ -1,0 +1,40 @@
+# Paste this as a new script in the Home Assistant script editor's YAML mode.
+alias: Svago - start when ready
+mode: restart
+fields:
+  ready_sensor:
+    name: Connection status sensor
+    description: Select this chair's Svago Connection status sensor.
+    required: true
+    selector:
+      entity:
+        integration: svago
+        domain: sensor
+  turn_on_button:
+    name: Turn on button
+    description: Select the same chair's Svago Turn on button.
+    required: true
+    selector:
+      entity:
+        integration: svago
+        domain: button
+sequence:
+  - if:
+      - condition: template
+        value_template: >-
+          {{ ready_sensor is not defined or ready_sensor is not string
+             or not (ready_sensor is match('^sensor[.][a-z0-9_]+$'))
+             or turn_on_button is not defined or turn_on_button is not string
+             or not (turn_on_button is match('^button[.][a-z0-9_]+$')) }}
+    then:
+      - stop: Choose the chair's Connection status sensor and Turn on button.
+        error: true
+  - wait_template: >-
+      {{ is_state(ready_sensor, 'Ready')
+         and states[turn_on_button] is not none
+         and not is_state(turn_on_button, 'unavailable') }}
+    timeout: "00:01:00"
+    continue_on_timeout: false
+  - action: button.press
+    target:
+      entity_id: "{{ turn_on_button }}"

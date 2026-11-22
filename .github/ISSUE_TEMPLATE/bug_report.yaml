@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a connection, control, memory, or timer problem.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Include what physically happened on the chair, not only what changed in Home Assistant.
+        Review diagnostic files before attaching them; remove personal identifiers or unrelated logs.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Svago integration version and Home Assistant Core version.
+      placeholder: "Svago 1.0.0; Home Assistant 2026.11.2"
+    validations:
+      required: true
+  - type: input
+    id: chair
+    attributes:
+      label: Chair and Bluetooth connection
+      description: Chair model, Bluetooth adapter or active proxy, and whether the Motion Mastery remote was off.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the control used, expected result, physical result, and Connection status / Last problem if available.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the starting chair position or heat/massage state when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Attach the downloaded Svago diagnostics after reproducing the issue, if available. Captures are not normally required.
