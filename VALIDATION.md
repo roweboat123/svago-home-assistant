@@ -1,4 +1,4 @@
-# Validation — Svago 1.0.1rc1
+# Validation — Svago 1.0.1
 
 ## Scope
 
@@ -15,10 +15,11 @@ replacement status waiting, fresh device lookup and automatic recovery without
 command replay. Storage and command behavior retain their existing checks.
 Reproduce these checks with [CONTRIBUTING.md](CONTRIBUTING.md).
 
-This is a test candidate. The missing-FFF0 error after power loss was reported on
-the development chair. Its cause has not yet been confirmed: automated tests
-establish the recovery path, not the behavior of the physical Bluetooth backend.
-Follow [the power-cycle test](docs/RECONNECT-TEST.md) before a stable release.
+The owner confirmed seamless reconnection on the affected chair with `1.0.1rc1`
+after reporting the missing-FFF0 setup error following power loss. Version 1.0.1
+uses the same connection code. This validates recovery on that installation;
+incomplete cached services remain an inferred cause, not a captured backend
+diagnosis. See [the power-cycle recovery check](docs/RECONNECT-TEST.md).
 
 GitHub-hosted hassfest and Marketplace/HACS validation run on each push. Their
 results are available under [Actions](https://github.com/roweboat123/svago-home-assistant/actions).
@@ -28,6 +29,8 @@ empty-memory setup are also checked during release preparation.
 
 ## Physical evidence
 
+- The owner confirmed seamless reconnection with the power-cycle recovery fix.
+  No manual integration reload was needed in the reported successful test.
 - Movement, lumbar, heat on/off and massage controls were exercised on the chair.
   Half-second headrest and footrest button bursts resolved the observed lack of
   movement with shorter taps. Backrest taps retain quarter-second timing.

@@ -1,20 +1,22 @@
-# Power-cycle recovery test — 1.0.1rc1
+# Power-cycle recovery check — 1.0.1
 
-This test candidate adds a bounded fresh-service-discovery attempt when Home
+Version 1.0.1 adds a bounded fresh-service-discovery attempt when Home
 Assistant connects but cannot find the required FFF0 service or FFF1/FFF2
-characteristics. Incomplete cached services are a possible cause of the reported
-error; the chair test below is needed to confirm recovery.
+characteristics. The owner confirmed seamless reconnection on the affected chair
+with the `1.0.1rc1` candidate, which uses the same connection code. The check below
+can verify recovery on another installation. Incomplete cached services remain
+a possible cause of the original error, rather than a confirmed backend diagnosis.
 
-## Install the candidate
+## Install or update
 
 1. Keep a copy of the installed `custom_components/svago` folder for rollback.
-2. Extract `svago-home-assistant-1.0.1rc1.zip` and replace the `svago` folder inside
+2. Extract `svago-home-assistant-1.0.1.zip` and replace the `svago` folder inside
    Home Assistant's `/config/custom_components/` with the included
    `custom_components/svago` folder.
 3. Restart Home Assistant, leaving the Svago integration configured. Saved
    memories and timer choices are stored separately and are preserved.
 4. Keep the Motion Mastery Bluetooth remote off and check that the chair reaches
-   **Ready**. The diagnostics should report version `1.0.1rc1`.
+   **Ready**. The diagnostics should report version `1.0.1`.
 
 ## Check recovery
 

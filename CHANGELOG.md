@@ -1,6 +1,8 @@
 # Changelog
 
-## 1.0.1rc1 — Test candidate
+## 1.0.1 — 2026-11-22
+
+Fix automatic reconnection after the chair is powered off and back on.
 
 - If the chair connects without its required FFF0 service or FFF1/FFF2
   characteristics, clear that client's service cache and attempt fresh discovery
@@ -11,9 +13,9 @@
   clearing produces a disconnect callback. Recovery sends no chair commands and
   never replays an earlier adjustment.
 
-This candidate addresses the reported missing-FFF0 setup error after power loss.
-Automated recovery checks pass; confirming the cause and recovery on the affected
-chair remains necessary before a stable release. See [the test procedure](docs/RECONNECT-TEST.md).
+The owner confirmed seamless reconnection on the affected chair with the
+`1.0.1rc1` candidate; this release retains that tested connection code. Existing
+saved memories and timer choices are preserved. See [the recovery check](docs/RECONNECT-TEST.md).
 
 ## 1.0.0 — 2026-11-22
 

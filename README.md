@@ -1,13 +1,20 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.0.0**.
+Version **1.0.1**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
 This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
+
+## What's new in 1.0.1
+
+Improved automatic reconnection after the chair loses power. If required Bluetooth
+services or characteristics are missing, the integration retries with fresh service
+discovery once. Seamless reconnection after turning the chair's power off and back
+on was confirmed on the development chair.
 
 ## Install and connect
 
@@ -152,6 +159,9 @@ entry also deletes its stored profiles and timer preferences.
 fresh usable chair status and capacity for the full command. It does not prove
 that a motor moved. Controls become unavailable when this path is not ready.
 
+- **After power returns:** the integration reconnects automatically. Keep the Motion
+  Mastery Bluetooth remote off and wait for **Ready** before using the controls.
+  Reconnection does not replay movement or restart heat, massage or Continuous sessions.
 - **Cannot connect:** confirm power, turn off the Motion Mastery Bluetooth remote,
   and check that HA has a connectable adapter or active Bluetooth proxy in range.
 - **Request completed but no movement:** check the requested direction and position;
