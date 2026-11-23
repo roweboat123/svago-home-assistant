@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.1rc1 — Test candidate
+
+- If the chair connects without its required FFF0 service or FFF1/FFF2
+  characteristics, clear that client's service cache and attempt fresh discovery
+  once. Resolve the chair through Home Assistant again before reconnecting.
+- Continue with the uncached attempt if clearing is unsupported or fails, and
+  expose the cache-recovery outcome in diagnostics. Stop on cancellation or unload.
+- Wait for fresh chair status on the replacement connection, including when cache
+  clearing produces a disconnect callback. Recovery sends no chair commands and
+  never replays an earlier adjustment.
+
+This candidate addresses the reported missing-FFF0 setup error after power loss.
+Automated recovery checks pass; confirming the cause and recovery on the affected
+chair remains necessary before a stable release. See [the test procedure](docs/RECONNECT-TEST.md).
+
 ## 1.0.0 — 2026-11-22
 
 First public release of Svago Motion Mastery.

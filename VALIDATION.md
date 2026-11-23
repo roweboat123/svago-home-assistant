@@ -1,4 +1,4 @@
-# Validation — Svago 1.0.0
+# Validation — Svago 1.0.1rc1
 
 ## Scope
 
@@ -8,11 +8,17 @@ checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
 Local validation passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**963 tests** on each, plus Ruff lint and formatting (58 Python files).
-Five dependency deprecation warnings remain on each version. Test fixtures use
-the storage atomic-write hook and registry initialization interface supported by
-both versions; integration runtime behavior is unchanged.
+**976 tests** on each, plus Ruff lint and formatting (60 Python files).
+Five dependency deprecation warnings remain on each version. The 13 added cases
+cover incomplete service recovery, cache errors/timeouts, cancellation and unload,
+replacement status waiting, fresh device lookup and automatic recovery without
+command replay. Storage and command behavior retain their existing checks.
 Reproduce these checks with [CONTRIBUTING.md](CONTRIBUTING.md).
+
+This is a test candidate. The missing-FFF0 error after power loss was reported on
+the development chair. Its cause has not yet been confirmed: automated tests
+establish the recovery path, not the behavior of the physical Bluetooth backend.
+Follow [the power-cycle test](docs/RECONNECT-TEST.md) before a stable release.
 
 GitHub-hosted hassfest and Marketplace/HACS validation run on each push. Their
 results are available under [Actions](https://github.com/roweboat123/svago-home-assistant/actions).
@@ -107,6 +113,13 @@ Normal use requires a powered chair and an available Bluetooth connection.
 The optional startup example waits for Ready before pressing Turn on.
 Setup, diagnostic publishing and preference restoration introduce no activation
 or movement writes.
+
+If required services are missing, setup clears that client's service cache and
+tries once with cached services disabled. It resolves the device again and waits
+for fresh usable status. A failed or unsupported cache clear does not prevent
+that single uncached attempt; cancellation or unload prevents another connection.
+Diagnostics retain the cache-clear result and missing-service error. Persistent
+failure returns to the existing setup or reconnect retry mechanism.
 
 ## Release checks still required
 

@@ -26,6 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 STATUS_TIMEOUT = 15
 WRITE_SIZE_TIMEOUT = 10
 MTU_TIMEOUT = 10
+SERVICE_CACHE_TIMEOUT = 10
 
 
 class Connection:
@@ -79,6 +80,9 @@ class Connection:
         self._write_count = 0
         self._last_write: dict | None = None
         self._last_write_failure: dict | None = None
+        self._service_cache_recoveries = 0
+        self._last_cache_clear: str | None = None
+        self._last_missing_service_error: str | None = None
         self.activity = ActionActivity(self.notify_listeners)
 
     async def load_preferences(self, entry_id: str) -> None:
@@ -190,6 +194,11 @@ class Connection:
             "connected": self.bluetooth_connected,
             "available": self.controls_ready,
             "connection_health": self.health_snapshot(),
+            "service_discovery": {
+                "cache_recovery_attempts": self._service_cache_recoveries,
+                "last_cache_clear": self._last_cache_clear,
+                "last_missing_service_error": self._last_missing_service_error,
+            },
             "activity": self.activity.snapshot(),
             "timer_preferences": self.preferences.diagnostics if self.preferences else None,
             "busy": self.controller.busy,
@@ -370,47 +379,7 @@ class Connection:
         self._setup_stage = "finding the chair"
         self.notify_listeners()
         try:
-            device = bluetooth.async_ble_device_from_address(
-                self.hass, self.address, connectable=True
-            )
-            if device is None:
-                raise ControlError(
-                    "Home Assistant has not detected this chair through a Bluetooth adapter "
-                    "or proxy that can connect to it."
-                )
-            self._setup_stage = "opening the Bluetooth connection"
-            self.notify_listeners()
-            client = await establish_connection(
-                BleakClientWithServiceCache,
-                device,
-                "Svago Motion Mastery",
-                disconnected_callback=self._disconnected,
-                ble_device_callback=lambda: bluetooth.async_ble_device_from_address(
-                    self.hass, self.address, connectable=True
-                ),
-                max_attempts=2,
-                timeout=20,
-            )
-            self._client = client
-            self._session_had_link = bool(client.is_connected)
-            backend = getattr(client, "_backend", None)
-            self._bluetooth_backend = type(backend if backend is not None else client).__name__
-            if not client.is_connected:
-                raise ControlError("The chair disconnected during setup")
-            self._setup_stage = "checking the chair's Bluetooth services"
-            self.notify_listeners()
-            service = client.services.get_service(SERVICE_UUID)
-            if service is None:
-                raise ControlError("The expected Svago service FFF0 is absent")
-            notify_char = service.get_characteristic(NOTIFY_UUID)
-            self._write_char = service.get_characteristic(WRITE_UUID)
-            if (
-                notify_char is None
-                or self._write_char is None
-                or "notify" not in notify_char.properties
-                or "write-without-response" not in self._write_char.properties
-            ):
-                raise ControlError("The expected FFF1/FFF2 characteristics are unavailable")
+            client, notify_char = await self._connect_services()
             self.controller.set_connected(True)
 
             def received(_characteristic, data):
@@ -499,6 +468,87 @@ class Connection:
         finally:
             self._connecting = False
             self.notify_listeners()
+
+    async def _connect_services(self):
+        """Refresh missing services once, without sending a chair command."""
+        for discovery_attempt in range(2):
+            if self._closed:
+                raise asyncio.CancelledError
+            # Cache clearing can remove the old backend device path. Resolve it
+            # again instead of reusing the device from the failed connection.
+            self._setup_stage = "finding the chair"
+            device = bluetooth.async_ble_device_from_address(
+                self.hass, self.address, connectable=True
+            )
+            if device is None:
+                raise ControlError(
+                    "Home Assistant has not detected this chair through a Bluetooth adapter "
+                    "or proxy that can connect to it."
+                )
+            self._setup_stage = "opening the Bluetooth connection"
+            self.notify_listeners()
+            client = await establish_connection(
+                BleakClientWithServiceCache,
+                device,
+                "Svago Motion Mastery",
+                disconnected_callback=self._disconnected,
+                ble_device_callback=lambda: bluetooth.async_ble_device_from_address(
+                    self.hass, self.address, connectable=True
+                ),
+                use_services_cache=discovery_attempt == 0,
+                max_attempts=2,
+                timeout=20,
+            )
+            self._client = client
+            self._session_had_link = bool(client.is_connected)
+            backend = getattr(client, "_backend", None)
+            self._bluetooth_backend = type(backend if backend is not None else client).__name__
+            if self._closed:
+                raise asyncio.CancelledError
+            if not client.is_connected:
+                raise ControlError("The chair disconnected during setup")
+            self._setup_stage = "checking the chair's Bluetooth services"
+            self.notify_listeners()
+            service = client.services.get_service(SERVICE_UUID)
+            if service is None:
+                missing = "The expected Svago service FFF0 is absent"
+            else:
+                notify_char = service.get_characteristic(NOTIFY_UUID)
+                write_char = service.get_characteristic(WRITE_UUID)
+                if (
+                    notify_char is not None
+                    and write_char is not None
+                    and "notify" in notify_char.properties
+                    and "write-without-response" in write_char.properties
+                ):
+                    self._write_char = write_char
+                    return client, notify_char
+                missing = "The expected FFF1/FFF2 characteristics are unavailable"
+            self._last_missing_service_error = missing
+            self._record("required_services_missing", fresh_discovery=bool(discovery_attempt))
+            if discovery_attempt:
+                raise ControlError(f"{missing} after fresh service discovery")
+
+            self._service_cache_recoveries += 1
+            self._setup_stage = "refreshing the chair's Bluetooth services"
+            self.notify_listeners()
+            self._record("service_cache_refresh_started")
+            try:
+                async with asyncio.timeout(SERVICE_CACHE_TIMEOUT):
+                    cleared = await client.clear_cache()
+                self._last_cache_clear = "cleared" if cleared else "not supported"
+            except asyncio.CancelledError:
+                self._last_cache_clear = "cancelled"
+                raise
+            except Exception as exc:
+                # An unsupported or failed cache clear must not prevent the
+                # one uncached attempt. Preserve the outcome for diagnostics.
+                self._last_cache_clear = f"failed ({type(exc).__name__})"
+            self._record("service_cache_refresh_result", outcome=self._last_cache_clear)
+            await self._drop(reason="Refreshing Bluetooth services")
+            # Clearing a cache may fire the old client's disconnect callback.
+            # Its wake-up must not satisfy the replacement's status wait.
+            self._ready.clear()
 
     def _reset_mtu(self) -> None:
         """A negotiated size is valid only for the connection that reported it."""

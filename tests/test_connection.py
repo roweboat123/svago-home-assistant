@@ -26,6 +26,7 @@ class Endpoint:
             WRITE_UUID: self.write,
         }[uuid]
         self.write_gatt_char = AsyncMock()
+        self.clear_cache = AsyncMock(return_value=True)
         self.disconnect = AsyncMock(side_effect=self._disconnect)
         self.callback = None
 
@@ -77,18 +78,26 @@ async def test_write_uses_fff2_without_response(transport):
 
 
 async def test_missing_service_disconnects_cleanly_without_writes(transport):
-    connection, endpoint, _ = transport
+    connection, endpoint, connect = transport
+    retry = Endpoint()
     endpoint.services.get_service.return_value = None
+    retry.services.get_service.return_value = None
+    connect.side_effect = [endpoint, retry]
     with pytest.raises(ControlError, match="FFF0") as error:
         await connection.start(monitor=False)
     assert str(error.value).startswith("Check that the Motion Mastery Bluetooth remote is off. ")
     assert connection.diagnostics()["last_setup_error"] == (
         "Failed while checking the chair's Bluetooth services: "
-        "The expected Svago service FFF0 is absent"
+        "The expected Svago service FFF0 is absent after fresh service discovery"
     )
     assert not connection.controller.available
     endpoint.disconnect.assert_awaited_once()
+    retry.disconnect.assert_awaited_once()
+    assert connect.await_count == 2
+    endpoint.clear_cache.assert_awaited_once()
+    retry.clear_cache.assert_not_awaited()
     endpoint.write_gatt_char.assert_not_awaited()
+    retry.write_gatt_char.assert_not_awaited()
 
 
 async def test_reconnect_gets_fresh_client_and_ignores_old_notifications(transport):
@@ -143,7 +152,7 @@ async def test_diagnostics_retains_exact_frames_after_disconnect_without_writing
         None, SimpleNamespace(runtime_data=connection)
     )
     assert endpoint.write_gatt_char.await_count == before
-    assert result["version"] == "1.0.0"
+    assert result["version"] == "1.0.1rc1"
     assert result["last_status_hex"] == TV_STATUS.hex().upper()
     assert result["connected"] is False
     assert any(
@@ -193,7 +202,7 @@ async def test_diagnostics_before_setup_has_no_connection_side_effects():
     from custom_components.svago.diagnostics import async_get_config_entry_diagnostics
 
     assert await async_get_config_entry_diagnostics(None, SimpleNamespace()) == {
-        "version": "1.0.0",
+        "version": "1.0.1rc1",
         "connection_initialized": False,
     }
 

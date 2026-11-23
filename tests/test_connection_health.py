@@ -147,8 +147,11 @@ async def test_reconnect_counters_are_durable_and_current_status_starts_fresh(tr
 
 
 async def test_setup_failure_remains_readable_after_close(transport):
-    connection, endpoint, _ = transport
+    connection, endpoint, connect = transport
+    retry = Endpoint()
     endpoint.services.get_service.return_value = None
+    retry.services.get_service.return_value = None
+    connect.side_effect = [endpoint, retry]
     with pytest.raises(ControlError, match="FFF0"):
         await connection.start(monitor=False)
     await connection.close()
@@ -159,6 +162,7 @@ async def test_setup_failure_remains_readable_after_close(transport):
     assert snapshot["connection_health"]["connect_attempts"] == 1
     assert snapshot["connection_health"]["successful_connections"] == 0
     endpoint.write_gatt_char.assert_not_awaited()
+    retry.write_gatt_char.assert_not_awaited()
 
 
 async def test_write_failure_survives_success_and_history_rollover_without_identifiers(transport):
