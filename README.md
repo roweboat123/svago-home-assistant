@@ -18,35 +18,24 @@ on was confirmed on the development chair.
 
 ## Install and connect
 
-Requires Home Assistant **2026.10.0 or newer**. Home Assistant 2026.11+ provides
-Marketplace; 2026.10 installations can use HACS.
+Requires Home Assistant 2026.10.0 or newer.
 
-Add [`roweboat123/svago-home-assistant`](https://github.com/roweboat123/svago-home-assistant)
-as a custom **Integration** repository in Marketplace/HACS, then download it and
-restart Home Assistant. Catalog inclusion requires a separate review.
+### Install from Marketplace or HACS
 
-For a manual installation, download the ZIP from
-[Releases](https://github.com/roweboat123/svago-home-assistant/releases):
+- **Home Assistant 2026.11 or newer:** Go to **Settings → Marketplace**, search for **Svago Motion Mastery**, and select **Install**. Restart if prompted.
+- **Home Assistant 2026.10:** Open **HACS**, search for **Svago Motion Mastery**, and select **Download**. Then restart Home Assistant.
 
-1. Copy its `custom_components/svago` folder into your Home Assistant
-   `/config/custom_components/` directory.
-2. Restart Home Assistant.
-3. Keep the chair powered on and turn off the **Motion Mastery Bluetooth remote**.
-4. In **Settings → Devices & services**, open the discovered Svago entry, or
-   choose **Add integration → Svago Motion Mastery** and enter your chair's
-   Bluetooth address.
-5. Wait for **Connection status → Ready**, then use the controls.
+### If it doesn’t appear in search
 
-The official Bluetooth remote will occupy the chair's connection; turn it off before using
-Home Assistant.
+Add `roweboat123/svago-home-assistant` as a custom **Integration** repository in Marketplace or HACS, then install it as above.
 
-For an upgrade, replace the integration folder and restart; keep your existing
-integration entry. Existing entity identities and saved memories are retained.
-Fresh installations start with **Memory 1, Memory 2 and Memory 3 empty**, ready for
-you to save your own settings. No personal chair address or someone else's
-recorded memories are installed.
+To install manually, download the ZIP from [Releases](https://github.com/roweboat123/svago-home-assistant/releases), copy the `custom_components/svago` folder into `/config/custom_components/`, and restart Home Assistant.
 
-See [Publishing](docs/PUBLISHING.md) for the release and catalog submission process.
+### Connect your chair
+
+1. Keep the chair powered on and turn off the Motion Mastery Bluetooth remote so Home Assistant can connect.
+2. Follow the setup prompt if it opens. Otherwise, go to **Settings → Devices & services** and open the discovered Svago entry, or select **Add integration → Svago Motion Mastery** and enter your chair’s Bluetooth address.
+3. Wait for **Connection status** to show **Ready**.
 
 ## Controls
 
