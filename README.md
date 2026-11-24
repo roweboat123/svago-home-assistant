@@ -37,6 +37,10 @@ To install manually, download the ZIP from [Releases](https://github.com/roweboa
 2. Follow the setup prompt if it opens. Otherwise, go to **Settings → Devices & services** and open the discovered Svago entry, or select **Add integration → Svago Motion Mastery** and enter your chair’s Bluetooth address.
 3. Wait for **Connection status** to show **Ready**.
 
+### Upgrading manually
+
+Replace the `custom_components/svago` folder and restart Home Assistant. Keep your existing Svago integration entry to preserve your entities and saved memories. On a fresh install, Memory 1, Memory 2, and Memory 3 start empty.
+
 ## Controls
 
 | Control | What it does |
