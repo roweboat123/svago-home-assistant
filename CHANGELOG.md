@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0rc13 — 2026-11-24
+
+- Use fixed 0.3-second headrest, backrest and footrest pulses, and fixed 0.5-second
+  seat pulses. Isolated direction presses no longer extend to wait for a reported
+  position increment; repeated presses retain the three-second burst cap.
+- Record that the earlier quarter-second backrest press was suitable and the
+  quarter-second seat pulse was too short. The new durations remain pending chair
+  confirmation and do not define a fixed physical step.
+- Retain Home behavior, the separate quarter-second wake interval, feedback
+  safeguards and existing entity identities.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc12 — 2026-11-24
 
 - Give **Seat tilt up** and **Seat tilt down** the same fixed 0.25-second pulse as

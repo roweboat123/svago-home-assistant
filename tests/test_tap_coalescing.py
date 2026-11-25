@@ -1,6 +1,7 @@
 """Repeated button presses share a bounded gesture, not queued future travel."""
 
 import asyncio
+from math import ceil
 
 import pytest
 from conftest import status_with
@@ -40,9 +41,11 @@ class GatedPulse:
         chair.controller._sleep = self.sleep
 
     async def sleep(self, seconds):
-        finished = self.chair.time + seconds
+        # Round simulated sleeps up to a nanosecond so float arithmetic cannot
+        # return just before the requested time or spin on a zero-length tick.
+        finished = ceil((self.chair.time + seconds) * 1e9) / 1e9
         first_part = min(seconds, self.pause_after)
-        self.chair.time += first_part
+        self.chair.time = ceil((self.chair.time + first_part) * 1e9) / 1e9
         if self.report_progress:
             report_one_step_per_burst(self.chair, self.reported_bursts)
         else:
@@ -72,7 +75,7 @@ def stops(chair):
     return [packet for packet in chair.writes if packet[13:17] == b"\x80" * 4]
 
 
-@pytest.mark.parametrize("index,pulse", [(0, 0.5), (1, 0.25), (2, 0.25), (3, 0.5)])
+@pytest.mark.parametrize("index,pulse", [(0, 0.3), (1, 0.3), (2, 0.5), (3, 0.3)])
 async def test_same_direction_extends_one_gesture_without_extra_activation_or_stop(
     chair, index, pulse
 ):
@@ -99,20 +102,24 @@ async def test_same_direction_extends_one_gesture_without_extra_activation_or_st
     assert second["direction_writes"] == 0
 
 
-@pytest.mark.parametrize("index", [1, 2])
+@pytest.mark.parametrize(
+    "index,end_time,write_count", [(0, 0.4, 4), (1, 0.4, 4), (2, 0.6, 6), (3, 0.4, 4)]
+)
 @pytest.mark.parametrize("direction", [-1, 1])
-async def test_join_without_progress_extends_only_the_timed_pulse(chair, index, direction):
+async def test_join_without_progress_extends_only_the_timed_pulse(
+    chair, index, end_time, write_count, direction
+):
     gate = GatedPulse(chair, report_progress=False)
     owner = asyncio.create_task(chair.controller.step_position(index, direction))
     assert await gate.tick() == pytest.approx(0.1)
     joined = asyncio.create_task(chair.controller.step_position(index, direction))
     await asyncio.sleep(0)
-    assert chair.controller._tap_session["deadline"] == pytest.approx(0.35)
+    assert chair.controller._tap_session["deadline"] == pytest.approx(end_time)
     gate.finish()
     assert await asyncio.gather(owner, joined) == [None, None]
 
-    assert chair.time == pytest.approx(0.35)
-    assert len(directions(chair)) == 4
+    assert chair.time == pytest.approx(end_time)
+    assert len(directions(chair)) == write_count
     assert len(stops(chair)) == 1
     first, second = chair.controller.tap_requests
     assert first["startup_extended"] is False
@@ -124,15 +131,17 @@ async def test_join_without_progress_extends_only_the_timed_pulse(chair, index, 
     count = len(chair.writes)
     await chair.controller.step_position(index, direction)
     assert chair.writes[count][5] == 0x11
-    assert len(directions(chair)) == 7
+    assert len(directions(chair)) == write_count + (5 if index == 2 else 3)
     assert len(stops(chair)) == 2
     assert chair.controller.tap_requests[-1]["burst_id"] != first["burst_id"]
 
 
-@pytest.mark.parametrize("index", [1, 2])
+@pytest.mark.parametrize(
+    "index,pulse,short_write_count", [(0, 0.3, 4), (1, 0.3, 4), (2, 0.5, 6), (3, 0.3, 4)]
+)
 @pytest.mark.parametrize("presses", [(0.02, 0.06), tuple(index / 40 for index in range(1, 120))])
 async def test_joined_timed_axis_pulses_keep_repeat_interval_and_cap_without_progress(
-    chair, index, presses
+    chair, index, pulse, short_write_count, presses
 ):
     chair.feedback = False
     chair.activation_feedback = True
@@ -159,20 +168,20 @@ async def test_joined_timed_axis_pulses_keep_repeat_interval_and_cap_without_pro
     chair.controller._sleep = sleep
     await chair.controller.step_position(index, 1)
     assert await asyncio.gather(*joiners) == [None] * len(presses)
-    expected_duration = min(3, presses[-1] + 0.25)
-    expected_writes = 4 if len(presses) == 2 else 30
+    expected_duration = min(3, presses[-1] + pulse)
+    expected_writes = short_write_count if len(presses) == 2 else 30
     assert len(directions(chair)) == expected_writes
     assert [record["seconds"] for record in owner_trace["direction_write_log"]] == [
         round(index / 10, 1) for index in range(max(0, expected_writes - 8), expected_writes)
     ]
-    assert owner_trace["stop"]["seconds"] == expected_duration
+    assert owner_trace["stop"]["seconds"] == pytest.approx(expected_duration)
     assert owner_trace["startup_extended"] is False
     assert owner_trace["startup_outcome"] == "not_observed_during_timed_pulse"
     assert len([packet for packet in chair.writes if packet[5] == 0x11]) == 1
     assert len(stops(chair)) == 1
 
 
-@pytest.mark.parametrize("index", [1, 2])
+@pytest.mark.parametrize("index", range(4))
 async def test_stop_interrupts_timed_axis_and_its_joiner(chair, index):
     gate = GatedPulse(chair, pause_after=0.025, report_progress=False)
     owner = asyncio.create_task(chair.controller.step_position(index, 1))
@@ -247,8 +256,8 @@ async def test_startup_presses_join_activation_without_building_travel_backlog(c
     assert chair.controller._tap_session["trace"]["coalesced_presses"] == 5
     release.set()
     assert await asyncio.gather(owner, *joined) == [None] * 6
-    assert chair.time == pytest.approx(0.5)
-    assert len(directions(chair)) == 5
+    assert chair.time == pytest.approx(0.3)
+    assert len(directions(chair)) == 3
     assert len(stops(chair)) == 1
     assert len([p for p in chair.writes if p[5] == 0x11]) == 1
 

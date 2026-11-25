@@ -26,11 +26,9 @@ from .protocol import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-# Headrest and footrest use the physically confirmed longer burst after
-# nonresponsive 0.25 s presses, retaining their startup feedback allowance.
-# Backrest and seat use quarter-second timed pulses without extending them
-# to wait for quantized position feedback.
-MOTOR_PULSE_SECONDS = (0.5, 0.25, 0.25, 0.5)
+# Direction buttons use fixed timed pulses, without extending them to wait
+# for quantized position feedback. Seat receives the longer half-second pulse.
+MOTOR_PULSE_SECONDS = (0.3, 0.3, 0.5, 0.3)
 MOTOR_REPEAT_SECONDS = 0.1
 LUMBAR_BURST_SECONDS = 3.0
 # Repeated taps extend the current gesture, never a backlog of future travel.
@@ -1971,7 +1969,7 @@ class Controller:
                     wall_hard_deadline=wall_started + MOTOR_BURST_MAX_SECONDS,
                     wall_startup_deadline=wall_started
                     + min(STARTUP_FEEDBACK_SECONDS, MOTOR_BURST_MAX_SECONDS),
-                    require_startup_progress=index not in (1, 2),
+                    require_startup_progress=False,
                     progress_observed=False,
                     start_position=start,
                     best_position=start,
