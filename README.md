@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc11** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc12** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,20 +9,18 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc11
+## What's new in 1.1.0rc12
 
-Backrest buttons now use a **fixed 0.25-second pulse for an isolated press**,
-without extending it to wait for a reported position increment. Physical response
-still needs confirmation. The pulse does not guarantee a fixed physical step or
-establish that the previously excessive adjustment size is resolved.
-
-**Seat tilt up** and **Seat tilt down** remain under Controls, with their original
-entity identities and the unchanged 0.25-second normal pulse.
+**Seat tilt up** and **Seat tilt down** now use the same **fixed 0.25-second pulse**
+as the backrest buttons for an isolated press, without extending it to wait for
+a reported position increment. The owner confirmed rc11's backrest press was
+suitable; the seat change still needs a chair check. Pulse timing does not set a
+fixed physical adjustment size. The seat buttons keep their original identities.
 
 The owner confirmed rc8's queued Footrest raise, one-press Memory 3 recall,
 latest-choice replacement and Stop cancellation during Home. A fresh Footrest
 raise also worked after Stop without another Home. This behavior is retained.
-The [short backrest check](docs/HOME-TEST.md) describes how to observe the new pulse.
+The [short seat check](docs/HOME-TEST.md) describes how to observe the new pulse.
 
 The separate pause after the first wake following Return to neutral remains
 **0.25 seconds**.
@@ -95,15 +93,14 @@ Replace the `custom_components/svago` folder and restart Home Assistant. Keep yo
 Other controls appear under **Controls**. The diagnostic sensors appear under
 **Diagnostics**.
 
-Direction buttons stop automatically. An isolated backrest press uses a fixed
-0.25-second pulse without extending it for position progress. Headrest and
-footrest normally use half-second presses, and seat uses a quarter second. Those
-three axes can continue until the first forward report or two seconds from
-movement start if their normal pulse ends without progress. No progress by that
-deadline ends their press with an error. Repeating the same direction extends
-one burst, with a three-second total cap; it cannot extend those axes' no-progress
-deadline. Stop, a reversal or another adjustment takes over after releasing the
-old command.
+Direction buttons stop automatically. An isolated backrest or seat press uses a
+fixed 0.25-second pulse without extending it for position progress. Headrest and
+footrest normally use half-second presses. Those two axes can continue until the
+first forward report or two seconds from movement start if their normal pulse
+ends without progress. No progress by that deadline ends their press with an
+error. Repeating the same direction extends one burst, with a three-second total
+cap; it cannot extend headrest or footrest's no-progress deadline. Stop, a reversal
+or another adjustment takes over after releasing the old command.
 A press at an observed limit quietly does nothing. Each press's physical
 adjustment size depends on the chair's response and is not fixed.
 
@@ -115,8 +112,9 @@ Only the first wake after a Home command adds the settling period; reconnecting
 or receiving status does not start a wake or replay an earlier action.
 
 Sliders target whole reported positions; fractional targets have not been
-established. Timed backrest buttons provide short adjustment commands without
-waiting for the next reported step; their physical movement still needs confirmation.
+established. Rescaling the displayed numbers would not add position precision.
+Timed backrest and seat buttons provide short adjustment commands without
+waiting for the next reported step; their physical adjustment size is not fixed.
 Position ranges are the chair's observed raw units, not percentages: headrest
 0–17, backrest 0–22, seat 0–40 and footrest 0–28. The chair may move the seat while
 reclining the backrest; returning the backrest does not necessarily return the seat.

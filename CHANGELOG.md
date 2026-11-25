@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0rc12 — 2026-11-24
+
+- Give **Seat tilt up** and **Seat tilt down** the same fixed 0.25-second pulse as
+  backrest, without extending an isolated press to wait for a position increment.
+- Record the owner's successful rc11 backrest button check. Seat's new timed
+  behavior remains pending a chair check; neither timing defines a fixed step.
+- Retain headrest/footrest startup handling, Home behavior, the separate
+  quarter-second wake interval, slider precision and existing entity identities.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc11 — 2026-11-24
 
 - Set an isolated backrest press to a fixed 0.25-second pulse, without extending

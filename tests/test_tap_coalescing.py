@@ -99,11 +99,13 @@ async def test_same_direction_extends_one_gesture_without_extra_activation_or_st
     assert second["direction_writes"] == 0
 
 
-async def test_backrest_join_without_progress_extends_only_the_timed_pulse(chair):
+@pytest.mark.parametrize("index", [1, 2])
+@pytest.mark.parametrize("direction", [-1, 1])
+async def test_join_without_progress_extends_only_the_timed_pulse(chair, index, direction):
     gate = GatedPulse(chair, report_progress=False)
-    owner = asyncio.create_task(chair.controller.step_position(1, 1))
+    owner = asyncio.create_task(chair.controller.step_position(index, direction))
     assert await gate.tick() == pytest.approx(0.1)
-    joined = asyncio.create_task(chair.controller.step_position(1, 1))
+    joined = asyncio.create_task(chair.controller.step_position(index, direction))
     await asyncio.sleep(0)
     assert chair.controller._tap_session["deadline"] == pytest.approx(0.35)
     gate.finish()
@@ -120,15 +122,18 @@ async def test_backrest_join_without_progress_extends_only_the_timed_pulse(chair
     assert second["shared_burst"]["startup_outcome"] == "not_observed_during_timed_pulse"
 
     count = len(chair.writes)
-    await chair.controller.step_position(1, 1)
+    await chair.controller.step_position(index, direction)
     assert chair.writes[count][5] == 0x11
     assert len(directions(chair)) == 7
     assert len(stops(chair)) == 2
     assert chair.controller.tap_requests[-1]["burst_id"] != first["burst_id"]
 
 
+@pytest.mark.parametrize("index", [1, 2])
 @pytest.mark.parametrize("presses", [(0.02, 0.06), tuple(index / 40 for index in range(1, 120))])
-async def test_joined_backrest_pulses_keep_repeat_interval_and_cap_without_progress(chair, presses):
+async def test_joined_timed_axis_pulses_keep_repeat_interval_and_cap_without_progress(
+    chair, index, presses
+):
     chair.feedback = False
     chair.activation_feedback = True
     chair.controller.accept_status(status_with(positions=(5, 3, 16, 10)))
@@ -144,7 +149,7 @@ async def test_joined_backrest_pulses_keep_repeat_interval_and_cap_without_progr
         while next_press is not None and next_press < finished:
             chair.time = next_press
             chair.controller.accept_status(chair.controller.status)
-            joiners.append(asyncio.create_task(chair.controller.step_position(1, 1)))
+            joiners.append(asyncio.create_task(chair.controller.step_position(index, 1)))
             await asyncio.sleep(0)
             next_press = next(press_times, None)
         chair.time = finished
@@ -152,7 +157,7 @@ async def test_joined_backrest_pulses_keep_repeat_interval_and_cap_without_progr
         await asyncio.sleep(0)
 
     chair.controller._sleep = sleep
-    await chair.controller.step_position(1, 1)
+    await chair.controller.step_position(index, 1)
     assert await asyncio.gather(*joiners) == [None] * len(presses)
     expected_duration = min(3, presses[-1] + 0.25)
     expected_writes = 4 if len(presses) == 2 else 30
@@ -167,11 +172,12 @@ async def test_joined_backrest_pulses_keep_repeat_interval_and_cap_without_progr
     assert len(stops(chair)) == 1
 
 
-async def test_stop_interrupts_timed_backrest_and_its_joiner(chair):
+@pytest.mark.parametrize("index", [1, 2])
+async def test_stop_interrupts_timed_axis_and_its_joiner(chair, index):
     gate = GatedPulse(chair, pause_after=0.025, report_progress=False)
-    owner = asyncio.create_task(chair.controller.step_position(1, 1))
+    owner = asyncio.create_task(chair.controller.step_position(index, 1))
     await gate.tick()
-    joined = asyncio.create_task(chair.controller.step_position(1, 1))
+    joined = asyncio.create_task(chair.controller.step_position(index, 1))
     await asyncio.sleep(0)
     await chair.controller.stop_movement()
     results = await asyncio.gather(owner, joined, return_exceptions=True)

@@ -484,9 +484,9 @@ async def test_half_second_press_continues_after_one_unit_and_preserves_latest_h
     assert chair.writes[-1][8:10] == b"\x00\x00" and chair.writes[-1][19] == 2
 
 
-@pytest.mark.parametrize("index", [0, 3])
+@pytest.mark.parametrize("index", range(4))
 @pytest.mark.parametrize("direction", [-1, 1])
-async def test_half_second_press_stops_early_at_observed_bound(chair, index, direction):
+async def test_direction_press_stops_early_at_observed_bound(chair, index, direction):
     chair.feedback = False
     chair.activation_feedback = True
     positions = [5, 6, 16, 10]
@@ -499,7 +499,7 @@ async def test_half_second_press_stops_early_at_observed_bound(chair, index, dir
     assert chair.writes[-1][13:17] == b"\x80" * 4
 
 
-@pytest.mark.parametrize("index", [0, 1, 3])
+@pytest.mark.parametrize("index", range(4))
 async def test_movement_cancellation_attempts_stop(chair, index):
     chair.feedback = False
     chair.activation_feedback = True
@@ -516,7 +516,7 @@ async def test_movement_cancellation_attempts_stop(chair, index):
     assert trace["stop"]["outcome"] == "write_returned"
 
 
-@pytest.mark.parametrize("index", [0, 1])
+@pytest.mark.parametrize("index", [0, 1, 2])
 async def test_movement_transport_failure_is_not_retried(chair, index):
     chair.fail_at = 2  # Activation succeeds before the first direction write fails.
     with pytest.raises(ControlError, match="not retried"):
@@ -544,7 +544,7 @@ async def test_normal_movement_release_failure_is_surfaced(chair, index):
     assert "not retried" in trace["stop"]["error"]
 
 
-@pytest.mark.parametrize("index", [0, 1])
+@pytest.mark.parametrize("index", [0, 1, 2])
 async def test_movement_reconnect_never_releases_on_new_connection(chair, index):
     chair.feedback = False
     chair.activation_feedback = True

@@ -1,41 +1,41 @@
-# Quarter-second backrest check — 1.1.0rc11
+# Quarter-second seat check — 1.1.0rc12
 
-This candidate uses a **fixed 0.25-second backrest pulse for an isolated press**.
-It does not extend the pulse to wait for a reported position increment. Its
-physical response still needs confirmation; the requested timing does not
-guarantee a fixed step or establish that the excessive adjustment size is resolved.
-The earlier 50 ms candidate produced no movement while the slider worked, but
-the firmware cause remains unverified.
+**Seat tilt up** and **Seat tilt down** now use a **fixed 0.25-second pulse for an
+isolated press**, without extending it to wait for a reported position increment.
+This matches the backrest mode the owner confirmed suitable in rc11. Seat's new
+timed response still needs confirmation; pulse duration does not define a fixed
+physical step.
 
-**Seat tilt up** and **Seat tilt down** remain under Controls with their original
-entity identities and 0.25-second normal pulse. Headrest and footrest retain
-half-second normal pulses. These three axes retain startup waiting until the
-first forward report or the two-second deadline if needed. Home handling and its
-separate 0.25-second wake interval are unchanged. Version 1.0.2 remains stable.
+The seat buttons keep their original entity identities and directions. Headrest
+and footrest retain half-second normal pulses and startup waiting until the first
+forward report or the two-second deadline if needed. Home handling and its separate
+0.25-second wake interval are unchanged. Version 1.0.2 remains stable.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc11.zip` and replace
+1. Extract `svago-home-assistant-1.1.0rc12.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready** and check that diagnostics report
-   `1.1.0rc11`.
+   `1.1.0rc12`.
 
-## Observe one backrest press
+## Observe a seat press
 
 From a comfortable position away from the chosen direction's endpoint, press
-**Backrest recline** or **Backrest upright** once. Observe whether it moves and
-stops, and whether the adjustment is suitable. This is a timed quarter-second
-pulse, not a request for a particular angle or position increment. An observed
-endpoint remains a quiet no-op.
+**Seat tilt up** or **Seat tilt down** once. Observe whether it moves and stops,
+and whether the adjustment is suitable. Let it finish before choosing the other
+direction. This is a timed quarter-second pulse, not a request for a particular
+angle or position increment. An observed endpoint remains a quiet no-op.
 
 Stop, reversal and replacement controls retain their interruption behavior.
 Repeated presses in the same direction join one burst with a three-second cap.
-For an isolated pulse, let the first press finish before choosing another.
-The successful Home checks do not need repeating; seat and long Continuous-timer
-checks are outside this candidate's scope.
+Backrest and the successful Home checks do not need repeating; long
+Continuous-timer checks are outside this candidate's scope.
+
+Sliders still target whole reported positions. Rescaling their numbers would not
+add precision; this build leaves slider range and step unchanged.
 
 ## Retained Home evidence and behavior
 

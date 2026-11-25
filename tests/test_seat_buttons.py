@@ -36,12 +36,15 @@ async def test_setup_restores_both_historical_seat_identities_without_commands(c
 
 
 @pytest.mark.parametrize("key,name,direction", SEAT_BUTTONS)
-async def test_seat_press_uses_original_direction_wakes_and_retains_quarter_second(
-    chair, key, name, direction
+@pytest.mark.parametrize("position_feedback", [False, True])
+async def test_seat_press_uses_original_direction_wakes_and_stops_after_quarter_second(
+    chair, key, name, direction, position_feedback
 ):
     entities = await registered_buttons(chair)
     entity = entities[f"{ADDRESS}_{key}"]
     initial = chair.controller.status.positions
+    chair.feedback = position_feedback
+    chair.activation_feedback = True
     await entity.async_press()
 
     assert entity.name == name
@@ -50,9 +53,19 @@ async def test_seat_press_uses_original_direction_wakes_and_retains_quarter_seco
     assert chair.time == pytest.approx(0.25)
     direction_byte = 0x82 if direction == 1 else 0x81
     movement = chair.writes[1:-1]
-    assert movement
+    assert len(movement) == 3
     assert all(packet[13:17] == bytes([0x8F, 0x8F, direction_byte, 0x8F]) for packet in movement)
     assert chair.writes[-1][13:17] == bytes([0x80] * 4)
     after = chair.controller.status.positions
-    assert (after[2] - initial[2]) * direction > 0
+    if position_feedback:
+        assert (after[2] - initial[2]) * direction > 0
+    else:
+        assert after == initial
+    trace = chair.controller.tap_requests[-1]
+    assert trace["startup_allowance_seconds"] == 0
+    assert trace["startup_extended"] is False
+    assert trace["feedback_changed"] is position_feedback
+    assert trace["startup_outcome"] == (
+        "progress_observed" if position_feedback else "not_observed_during_timed_pulse"
+    )
     assert after[:2] == initial[:2] and after[3] == initial[3]

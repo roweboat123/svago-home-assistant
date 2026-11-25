@@ -60,6 +60,7 @@ def follow_up(controller, kind):
     actions = {
         "tap": lambda: controller.step_position(3, 1),
         "backrest_tap": lambda: controller.step_position(1, 1),
+        "seat_tap": lambda: controller.step_position(2, 1),
         "slider": lambda: controller.set_position(3, 2),
         "lumbar": lambda: controller.adjust_lumbar(True),
         "preset": lambda: controller.select_preset("zgr"),
@@ -84,6 +85,7 @@ def follow_up(controller, kind):
     [
         "tap",
         "backrest_tap",
+        "seat_tap",
         "slider",
         "lumbar",
         "preset",
@@ -118,7 +120,7 @@ async def test_foreground_controls_wait_for_verified_home(held_home, kind):
     assert all(outcome == "reported_neutral" for _, outcome in chair.dispatches[1:])
 
 
-@pytest.mark.parametrize("latest", ["tap", "backrest_tap", "zone"])
+@pytest.mark.parametrize("latest", ["tap", "backrest_tap", "seat_tap", "zone"])
 async def test_only_latest_of_mixed_waiting_controls_dispatches(held_home, latest):
     chair = held_home
     home = await chair.start_home()
@@ -134,10 +136,10 @@ async def test_only_latest_of_mixed_waiting_controls_dispatches(held_home, lates
     results = await asyncio.gather(*older, return_exceptions=True)
     assert all(isinstance(result, CommandSuperseded) for result in results)
     assert not chair.controller.memory_requests[-1].get("command_hex")
-    if latest in ("tap", "backrest_tap"):
-        index = 3 if latest == "tap" else 1
+    if latest in ("tap", "backrest_tap", "seat_tap"):
+        index = {"tap": 3, "backrest_tap": 1, "seat_tap": 2}[latest]
         assert any(packet[13 + index] == 0x82 for packet in chair.writes[1:])
-        if latest == "backrest_tap":
+        if latest in ("backrest_tap", "seat_tap"):
             trace = chair.controller.tap_requests[-1]
             assert trace["movement_duration_seconds"] == pytest.approx(0.25)
             assert trace["startup_extended"] is False

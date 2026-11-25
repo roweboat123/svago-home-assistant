@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc11
+# Validation — Svago 1.1.0rc12
 
 ## Scope
 
@@ -7,12 +7,12 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Version 1.1.0rc11 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**1,199 tests** on each, plus Ruff lint and formatting.
-Five dependency deprecation warnings remain on each version. Checks cover the
-fixed quarter-second backrest pulse without progress extension, direction-write
-cadence, early sleep returns, joined-tap caps and interruption safeguards. They also
-retain the seat entities' original identities and direction mapping.
+Version 1.1.0rc12 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+**1,236 tests** on each, plus Ruff lint and formatting.
+Five dependency deprecation warnings remain on each version. Checks cover fixed
+quarter-second backrest and seat pulses, both seat directions, direction-write
+cadence, early sleep returns, joined-tap caps, feedback failures and interruption
+safeguards, plus the retained seat identities and direction mapping.
 Existing checks cover Home completion with only the latest follow-up, Stop and
 failure handling, delayed memory lookup and settings-lock races,
 recall-only targeting, failures before preset writes,
@@ -35,7 +35,7 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc11 retains Return to neutral under Configuration and the removal of
+Version 1.1.0rc12 retains Return to neutral under Configuration and the removal of
 the standalone Turn on button. Home's entity identity, native command and completion
 checks are unchanged. This remains a release candidate; 1.0.2 is the latest
 stable release.
@@ -48,15 +48,17 @@ The manual archive includes its YAML action metadata.
 
 The owner reported that rc9's 50 ms backrest taps produced no physical movement
 or error while the backrest slider worked. Version rc10 restored rc8's controller
-behavior. At the owner's request, rc11 instead uses a fixed 0.25-second backrest
-pulse for an isolated press, without extending it to wait for a reported position
-increment. Headrest and footrest retain their 0.5-second normal pulse, seat retains
-0.25 seconds, and those axes retain the two-second startup allowance. The
-three-second burst cap and rc9's seat entity identities and direction mapping
-remain. The firmware cause of the failed 50 ms taps is unverified, and the
-quarter-second candidate's physical response is not yet confirmed. Excessive
-adjustment size and smaller physical-step calibration remain unresolved. No
-additional diagnostic capture is requested.
+behavior, then rc11 introduced a fixed 0.25-second backrest pulse without waiting
+for a reported position increment. The owner confirmed that rc11's backrest
+button press was suitable. This confirms the reported response on the development
+chair, not an exact physical step size or behavior on other hardware.
+
+Version rc12 applies the same fixed quarter-second pulse to **Seat tilt up** and
+**Seat tilt down**. Their new timed response remains pending a chair check.
+Headrest and footrest retain half-second normal pulses and the two-second startup
+allowance. The three-second burst cap, seat entity identities and direction
+mapping remain. The firmware cause of the failed 50 ms taps is unverified;
+physical-step calibration is not established by the successful rc11 result.
 
 The latest rc7 footrest report contains four no-progress errors across three
 command bursts and one joined press. Writes returned successfully, feedback
@@ -101,8 +103,9 @@ establishing the cause. That change bounded startup waiting to two seconds and
 kept the three-second absolute burst cap. The owner subsequently confirmed that
 1.1.0rc3 works; the physical cause remains unproven. Version rc10 restored
 backrest's startup allowance after the unsuccessful rc9 timed-tap experiment.
-Version rc11 uses a fixed quarter-second backrest pulse; the other axes retain
-startup waiting.
+Version rc11 introduced a fixed quarter-second backrest pulse, confirmed suitable
+by the owner. Version rc12 extends that timed mode to seat; headrest and footrest
+retain startup waiting.
 
 Before rc3, the owner reported that the first memory press after Home only woke
 the wired controller and the second performed recall, regardless of time spent waiting
@@ -161,8 +164,9 @@ empty-memory setup are also checked during release preparation.
   in the captured status fields.
 - The owner reported no backrest movement or error from rc9's 50 ms taps while
   the backrest slider worked. This establishes the unsuccessful candidate result,
-  not its firmware cause. No later backrest response is confirmed here; rc11's
-  quarter-second pulse still needs a chair check.
+  not its firmware cause. The owner subsequently confirmed that rc11's fixed
+  quarter-second backrest press was suitable. Seat's rc12 timed mode remains
+  pending a chair check; a fixed physical step is not established.
 - The owner confirmed seamless reconnection with the power-cycle recovery fix.
   No manual integration reload was needed in the reported successful test.
 - Movement, lumbar, heat on/off and massage controls were exercised on the chair.
@@ -245,13 +249,12 @@ during storage lookup invalidates an older recall. Its integration activity is
 recorded as Recall, but it does not update HA's button last-pressed timestamp;
 neither record proves physical movement.
 
-An isolated backrest tap uses 0.25 seconds without extending for a position
-increment. Headrest and footrest use 0.5 seconds, and seat uses 0.25 seconds.
-Same-direction taps join an active burst with a three-second maximum from its
-start. For headrest, seat and footrest, a pulse without forward progress can
-extend until the first forward report or the two-second startup deadline. Joined
-presses cannot extend that deadline; no progress produces a release and an explicit
-failure on those axes.
+An isolated backrest or seat tap uses 0.25 seconds without extending for a
+position increment. Headrest and footrest use 0.5 seconds. Same-direction taps
+join an active burst with a three-second maximum from its start. For headrest and
+footrest, a pulse without forward progress can extend until the first forward
+report or the two-second startup deadline. Joined presses cannot extend that
+deadline; no progress produces a release and an explicit failure on those axes.
 Reverse, another axis, a slider, memory or Stop use the
 existing stop-before-handoff behavior. Observed endpoints and already-reached
 slider targets are quiet no-ops. Genuine transport, feedback and stop failures
@@ -282,20 +285,20 @@ failure returns to the existing setup or reconnect retry mechanism.
 
 ## Recorded limits and release checks
 
-The [candidate guide](docs/HOME-TEST.md) describes one quarter-second backrest
-press and observing its response. It does not request an additional capture,
-claim a calibrated smaller step or ask to repeat the successful rc8 Home checks.
-Seat's restored controls retain their existing physical-validation status;
-unrelated long Continuous timing tests are not part of this candidate check.
+The [candidate guide](docs/HOME-TEST.md) focuses on observing a quarter-second seat
+press. Backrest and the successful rc8 Home checks do not need repeating for this
+candidate. Seat timing is pending physical confirmation; a calibrated physical
+step and unrelated long Continuous timing behavior remain outside this check.
 Sliders still target whole reported positions. Fractional targets or readback
-have not been verified, and this build does not change slider precision.
+have not been verified. Rescaling their displayed numbers would not add precision,
+and this build does not change their range or step.
 That extra settling interval is armed by a Home command from HA. Physical
 controller or remote Off is not detected and does not itself arm the interval;
 startup reliability through that path remains unresolved.
 
 The successful rc8 checks do not establish repeated Home, every subsequent
 control after Stop, or every comfort/settings handoff. Those remain recorded
-limits; they are not part of the quarter-second backrest check. Longer renewal
+limits; they are not part of the quarter-second seat check. Longer renewal
 schedules and combined heat/massage behavior retain their existing
 physical-validation limits.
 

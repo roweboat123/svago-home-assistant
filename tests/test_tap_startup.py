@@ -8,7 +8,7 @@ from conftest import status_with
 
 from custom_components.svago import controller as controller_module
 from custom_components.svago.controller import CommandSuperseded, ControlError
-from custom_components.svago.protocol import Status, checksum
+from custom_components.svago.protocol import OBSERVED_BOUNDS, Status, checksum
 
 
 def prepare(chair, *, index=3, position=8):
@@ -157,16 +157,17 @@ async def test_prompt_progress_keeps_existing_nominal_tap(chair, index, nominal,
     assert trace["startup_outcome"] == "progress_observed"
 
 
+@pytest.mark.parametrize("index", [1, 2])
 @pytest.mark.parametrize("direction", [-1, 1])
 @pytest.mark.parametrize("feedback", ["unchanged", "none", "late"])
-async def test_backrest_stops_at_timed_deadline_without_reported_progress(
-    chair, direction, feedback
+async def test_timed_axis_stops_at_deadline_without_reported_progress(
+    chair, index, direction, feedback
 ):
-    prepare(chair, index=1, position=5)
+    prepare(chair, index=index, position=5)
     if feedback != "none":
-        chair.on_sleep = lambda: report(chair, 1, 5)
+        chair.on_sleep = lambda: report(chair, index, 5)
 
-    await chair.controller.step_position(1, direction)
+    await chair.controller.step_position(index, direction)
 
     assert chair.time == pytest.approx(0.25)
     assert len(directions(chair)) == 3
@@ -187,33 +188,36 @@ async def test_backrest_stops_at_timed_deadline_without_reported_progress(
         trace = deepcopy(trace)
         count = len(chair.writes)
         chair.time = 0.6
-        report(chair, 1, 5 + direction)
+        report(chair, index, 5 + direction)
         await asyncio.sleep(0)
         assert len(chair.writes) == count
         assert chair.controller.tap_requests[-1] == trace
 
 
+@pytest.mark.parametrize("index", [1, 2])
 @pytest.mark.parametrize("blocked", ["write", "sleep"])
-async def test_backrest_wall_deadline_releases_without_extending_for_progress(chair, blocked):
-    prepare(chair, index=1, position=5)
+async def test_timed_axis_wall_deadline_releases_without_extending_for_progress(
+    chair, index, blocked
+):
+    prepare(chair, index=index, position=5)
 
     if blocked == "write":
 
         async def write(packet):
             await chair.write(packet)
-            if packet[14] == 0x82:
+            if packet[13 + index] == 0x82:
                 await asyncio.Event().wait()
 
         chair.controller._write = write
         with pytest.raises(ControlError, match="Movement write timed out"):
-            await asyncio.wait_for(chair.controller.step_position(1, 1), 1)
+            await asyncio.wait_for(chair.controller.step_position(index, 1), 1)
     else:
 
         async def sleep(_seconds):
             await asyncio.Event().wait()
 
         chair.controller._sleep = sleep
-        await asyncio.wait_for(chair.controller.step_position(1, 1), 1)
+        await asyncio.wait_for(chair.controller.step_position(index, 1), 1)
 
     assert len(directions(chair)) == 1
     assert len(stops(chair)) == 1
@@ -226,19 +230,22 @@ async def test_backrest_wall_deadline_releases_without_extending_for_progress(ch
     assert chair.controller._tap_session is None
 
 
+@pytest.mark.parametrize("index", [1, 2])
 @pytest.mark.parametrize("progress", [False, True])
-async def test_early_sleep_return_cannot_add_or_accelerate_backrest_repeats(chair, progress):
-    prepare(chair, index=1, position=5)
+async def test_early_sleep_return_cannot_add_or_accelerate_timed_axis_repeats(
+    chair, index, progress
+):
+    prepare(chair, index=index, position=5)
 
     async def sleep(seconds):
         # Return early from both the normal repeat sleep and the shorter final
         # sleep near 0.25 s; neither permits an early or extra direction write.
         chair.time += seconds - 0.001 if seconds > 0.01 else seconds
-        report(chair, 1, 6 if progress else 5)
+        report(chair, index, 6 if progress else 5)
         await asyncio.sleep(0)
 
     chair.controller._sleep = sleep
-    await chair.controller.step_position(1, 1)
+    await chair.controller.step_position(index, 1)
 
     assert chair.time == pytest.approx(0.25)
     assert len(directions(chair)) == 3
@@ -249,16 +256,22 @@ async def test_early_sleep_return_cannot_add_or_accelerate_backrest_repeats(chai
     assert trace["startup_extended"] is False
 
 
+@pytest.mark.parametrize("index", [1, 2])
+@pytest.mark.parametrize("direction", [-1, 1])
 @pytest.mark.parametrize("feedback", ["reverse", "out_of_bounds", "stale"])
-async def test_timed_backrest_preserves_feedback_guards(chair, feedback):
-    prepare(chair, index=1, position=5)
+async def test_timed_axis_preserves_feedback_guards(chair, index, direction, feedback):
+    prepare(chair, index=index, position=5)
     if feedback == "stale":
         chair.controller._stale_after = 0.01
     else:
-        chair.on_sleep = lambda: report(chair, 1, 3 if feedback == "reverse" else 23)
+        chair.on_sleep = lambda: report(
+            chair,
+            index,
+            5 - 2 * direction if feedback == "reverse" else OBSERVED_BOUNDS[index][1] + 1,
+        )
 
     with pytest.raises(ControlError, match="Fresh|Unexpected position"):
-        await chair.controller.step_position(1, 1)
+        await chair.controller.step_position(index, direction)
 
     assert len(directions(chair)) == 1
     assert len(stops(chair)) == (0 if feedback == "stale" else 1)
@@ -266,8 +279,9 @@ async def test_timed_backrest_preserves_feedback_guards(chair, feedback):
     assert chair.controller._needs_stop is (feedback == "stale")
 
 
-async def test_timed_backrest_failed_stop_requires_handoff_before_next_wake(chair):
-    prepare(chair, index=1, position=5)
+@pytest.mark.parametrize("index", [1, 2])
+async def test_timed_axis_failed_stop_requires_handoff_before_next_wake(chair, index):
+    prepare(chair, index=index, position=5)
 
     def fail_stop(packet):
         if packet[13:17] == b"\x80" * 4:
@@ -275,7 +289,7 @@ async def test_timed_backrest_failed_stop_requires_handoff_before_next_wake(chai
 
     chair.on_write = fail_stop
     with pytest.raises(ControlError, match="not retried"):
-        await chair.controller.step_position(1, 1)
+        await chair.controller.step_position(index, 1)
     assert chair.controller._needs_stop
     assert len(directions(chair)) == 3
     count = len(chair.writes)
