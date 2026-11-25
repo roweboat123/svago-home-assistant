@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0rc11 — 2026-11-24
+
+- Set an isolated backrest press to a fixed 0.25-second pulse, without extending
+  it to wait for a reported position increment. Retain Stop, feedback checks and
+  the three-second cap on repeated presses.
+- Keep headrest/footrest and seat timing, their bounded startup handling, the
+  restored seat controls and the confirmed Home handoff behavior unchanged.
+- Keep the separate 0.25-second post-Home wake interval unchanged.
+
+Physical response to the quarter-second backrest pulse still needs confirmation.
+It does not guarantee a fixed physical step or establish a fix for excessive
+movement. Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc10 — 2026-11-24
 
 - Restore rc8's backrest behavior: a nominal 0.1-second pulse with startup waiting

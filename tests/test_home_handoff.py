@@ -139,7 +139,7 @@ async def test_only_latest_of_mixed_waiting_controls_dispatches(held_home, lates
         assert any(packet[13 + index] == 0x82 for packet in chair.writes[1:])
         if latest == "backrest_tap":
             trace = chair.controller.tap_requests[-1]
-            assert trace["movement_duration_seconds"] == pytest.approx(0.1)
+            assert trace["movement_duration_seconds"] == pytest.approx(0.25)
             assert trace["startup_extended"] is False
     else:
         assert len(chair.writes) == 2

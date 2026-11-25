@@ -26,9 +26,10 @@ def report_one_step_per_burst(chair, reported_bursts):
 class GatedPulse:
     """Pause each poll; report one useful step per burst without hitting a bound."""
 
-    def __init__(self, chair, *, pause_after=0.1):
+    def __init__(self, chair, *, pause_after=0.1, report_progress=True):
         self.chair = chair
         self.pause_after = pause_after
+        self.report_progress = report_progress
         self.ticks = asyncio.Queue()
         self.permits = asyncio.Queue()
         self.free = False
@@ -42,7 +43,10 @@ class GatedPulse:
         finished = self.chair.time + seconds
         first_part = min(seconds, self.pause_after)
         self.chair.time += first_part
-        report_one_step_per_burst(self.chair, self.reported_bursts)
+        if self.report_progress:
+            report_one_step_per_burst(self.chair, self.reported_bursts)
+        else:
+            self.chair.controller.accept_status(self.chair.controller.status)
         self.ticks.put_nowait(self.chair.time)
         if not self.free:
             await self.permits.get()
@@ -68,7 +72,7 @@ def stops(chair):
     return [packet for packet in chair.writes if packet[13:17] == b"\x80" * 4]
 
 
-@pytest.mark.parametrize("index,pulse", [(0, 0.5), (1, 0.1), (2, 0.25), (3, 0.5)])
+@pytest.mark.parametrize("index,pulse", [(0, 0.5), (1, 0.25), (2, 0.25), (3, 0.5)])
 async def test_same_direction_extends_one_gesture_without_extra_activation_or_stop(
     chair, index, pulse
 ):
@@ -93,6 +97,92 @@ async def test_same_direction_extends_one_gesture_without_extra_activation_or_st
     assert first["coalesced_presses"] == 1
     assert second["coalesced_into_burst"] == first["burst_id"]
     assert second["direction_writes"] == 0
+
+
+async def test_backrest_join_without_progress_extends_only_the_timed_pulse(chair):
+    gate = GatedPulse(chair, report_progress=False)
+    owner = asyncio.create_task(chair.controller.step_position(1, 1))
+    assert await gate.tick() == pytest.approx(0.1)
+    joined = asyncio.create_task(chair.controller.step_position(1, 1))
+    await asyncio.sleep(0)
+    assert chair.controller._tap_session["deadline"] == pytest.approx(0.35)
+    gate.finish()
+    assert await asyncio.gather(owner, joined) == [None, None]
+
+    assert chair.time == pytest.approx(0.35)
+    assert len(directions(chair)) == 4
+    assert len(stops(chair)) == 1
+    first, second = chair.controller.tap_requests
+    assert first["startup_extended"] is False
+    assert first["startup_outcome"] == "not_observed_during_timed_pulse"
+    assert first["feedback_changed"] is False
+    assert second["coalesced_into_burst"] == first["burst_id"]
+    assert second["shared_burst"]["startup_outcome"] == "not_observed_during_timed_pulse"
+
+    count = len(chair.writes)
+    await chair.controller.step_position(1, 1)
+    assert chair.writes[count][5] == 0x11
+    assert len(directions(chair)) == 7
+    assert len(stops(chair)) == 2
+    assert chair.controller.tap_requests[-1]["burst_id"] != first["burst_id"]
+
+
+@pytest.mark.parametrize("presses", [(0.02, 0.06), tuple(index / 40 for index in range(1, 120))])
+async def test_joined_backrest_pulses_keep_repeat_interval_and_cap_without_progress(chair, presses):
+    chair.feedback = False
+    chair.activation_feedback = True
+    chair.controller.accept_status(status_with(positions=(5, 3, 16, 10)))
+    press_times = iter(presses)
+    next_press = next(press_times)
+    joiners = []
+    owner_trace = None
+
+    async def sleep(seconds):
+        nonlocal next_press, owner_trace
+        owner_trace = chair.controller._tap_session["trace"]
+        finished = chair.time + seconds
+        while next_press is not None and next_press < finished:
+            chair.time = next_press
+            chair.controller.accept_status(chair.controller.status)
+            joiners.append(asyncio.create_task(chair.controller.step_position(1, 1)))
+            await asyncio.sleep(0)
+            next_press = next(press_times, None)
+        chair.time = finished
+        chair.controller.accept_status(chair.controller.status)
+        await asyncio.sleep(0)
+
+    chair.controller._sleep = sleep
+    await chair.controller.step_position(1, 1)
+    assert await asyncio.gather(*joiners) == [None] * len(presses)
+    expected_duration = min(3, presses[-1] + 0.25)
+    expected_writes = 4 if len(presses) == 2 else 30
+    assert len(directions(chair)) == expected_writes
+    assert [record["seconds"] for record in owner_trace["direction_write_log"]] == [
+        round(index / 10, 1) for index in range(max(0, expected_writes - 8), expected_writes)
+    ]
+    assert owner_trace["stop"]["seconds"] == expected_duration
+    assert owner_trace["startup_extended"] is False
+    assert owner_trace["startup_outcome"] == "not_observed_during_timed_pulse"
+    assert len([packet for packet in chair.writes if packet[5] == 0x11]) == 1
+    assert len(stops(chair)) == 1
+
+
+async def test_stop_interrupts_timed_backrest_and_its_joiner(chair):
+    gate = GatedPulse(chair, pause_after=0.025, report_progress=False)
+    owner = asyncio.create_task(chair.controller.step_position(1, 1))
+    await gate.tick()
+    joined = asyncio.create_task(chair.controller.step_position(1, 1))
+    await asyncio.sleep(0)
+    await chair.controller.stop_movement()
+    results = await asyncio.gather(owner, joined, return_exceptions=True)
+    assert all(isinstance(result, CommandSuperseded) for result in results)
+    assert len(directions(chair)) == 1
+    assert stops(chair)
+    count = len(chair.writes)
+    gate.finish()
+    await asyncio.sleep(0)
+    assert len(chair.writes) == count
+    assert chair.controller._tap_session is None
 
 
 async def test_many_repeated_presses_have_three_second_cap_and_bounded_diagnostics(chair):

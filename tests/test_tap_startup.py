@@ -1,6 +1,7 @@
 """Short taps allow captured motor startup latency without replaying an action."""
 
 import asyncio
+from copy import deepcopy
 
 import pytest
 from conftest import status_with
@@ -92,7 +93,6 @@ class StartupGate:
             ((0.627, 9),),
             "7E020100100003842A300200008F8F8F820000010100010000287E",
         ),
-        (1, -1, 6, ((0.6, 5),), None),
     ],
 )
 async def test_delayed_startup_continues_same_direction_until_first_net_progress(
@@ -132,13 +132,13 @@ async def test_delayed_startup_continues_same_direction_until_first_net_progress
 
 
 @pytest.mark.parametrize(
-    "index,nominal,writes", [(0, 0.5, 5), (1, 0.1, 1), (2, 0.25, 3), (3, 0.5, 5)]
+    "index,nominal,writes", [(0, 0.5, 5), (1, 0.25, 3), (2, 0.25, 3), (3, 0.5, 5)]
 )
 async def test_prompt_progress_keeps_existing_nominal_tap(chair, index, nominal, writes):
     prepare(chair, index=index, position=5)
 
     async def sleep_with_early_feedback(seconds):
-        # A prompt report must arrive before the new 0.1 s backrest deadline.
+        # A prompt report arrives before the first direction-repeat interval.
         finished = chair.time + seconds
         chair.time += seconds / 2
         report(chair, index, 6)
@@ -153,8 +153,142 @@ async def test_prompt_progress_keeps_existing_nominal_tap(chair, index, nominal,
     assert len(stops(chair)) == 1
     trace = chair.controller.tap_requests[-1]
     assert trace["startup_extended"] is False
-    assert trace["first_progress_seconds"] == pytest.approx(0.05)
+    assert trace["first_progress_seconds"] == pytest.approx(min(0.1, nominal) / 2)
     assert trace["startup_outcome"] == "progress_observed"
+
+
+@pytest.mark.parametrize("direction", [-1, 1])
+@pytest.mark.parametrize("feedback", ["unchanged", "none", "late"])
+async def test_backrest_stops_at_timed_deadline_without_reported_progress(
+    chair, direction, feedback
+):
+    prepare(chair, index=1, position=5)
+    if feedback != "none":
+        chair.on_sleep = lambda: report(chair, 1, 5)
+
+    await chair.controller.step_position(1, direction)
+
+    assert chair.time == pytest.approx(0.25)
+    assert len(directions(chair)) == 3
+    assert len(stops(chair)) == 1
+    assert chair.writes[-1] == stops(chair)[0]
+    assert len([packet for packet in chair.writes if packet[5] == 0x11]) == 1
+    trace = chair.controller.tap_requests[-1]
+    assert trace["outcome"] == "pulse_completed"
+    assert trace["feedback_changed"] is False
+    assert trace["startup_allowance_seconds"] == 0
+    assert trace["startup_extended"] is False
+    assert trace["startup_outcome"] == "not_observed_during_timed_pulse"
+    assert trace["first_progress_seconds"] is None
+    assert [record["seconds"] for record in trace["direction_write_log"]] == [0, 0.1, 0.2]
+    assert trace["stop"]["seconds"] == 0.25
+    assert chair.controller._tap_session is None
+    if feedback == "late":
+        trace = deepcopy(trace)
+        count = len(chair.writes)
+        chair.time = 0.6
+        report(chair, 1, 5 + direction)
+        await asyncio.sleep(0)
+        assert len(chair.writes) == count
+        assert chair.controller.tap_requests[-1] == trace
+
+
+@pytest.mark.parametrize("blocked", ["write", "sleep"])
+async def test_backrest_wall_deadline_releases_without_extending_for_progress(chair, blocked):
+    prepare(chair, index=1, position=5)
+
+    if blocked == "write":
+
+        async def write(packet):
+            await chair.write(packet)
+            if packet[14] == 0x82:
+                await asyncio.Event().wait()
+
+        chair.controller._write = write
+        with pytest.raises(ControlError, match="Movement write timed out"):
+            await asyncio.wait_for(chair.controller.step_position(1, 1), 1)
+    else:
+
+        async def sleep(_seconds):
+            await asyncio.Event().wait()
+
+        chair.controller._sleep = sleep
+        await asyncio.wait_for(chair.controller.step_position(1, 1), 1)
+
+    assert len(directions(chair)) == 1
+    assert len(stops(chair)) == 1
+    trace = chair.controller.tap_requests[-1]
+    assert trace["outcome"] == ("failed" if blocked == "write" else "pulse_completed")
+    assert trace["startup_outcome"] == (
+        "write_timed_out" if blocked == "write" else "not_observed_during_timed_pulse"
+    )
+    assert trace["startup_extended"] is False
+    assert chair.controller._tap_session is None
+
+
+@pytest.mark.parametrize("progress", [False, True])
+async def test_early_sleep_return_cannot_add_or_accelerate_backrest_repeats(chair, progress):
+    prepare(chair, index=1, position=5)
+
+    async def sleep(seconds):
+        # Return early from both the normal repeat sleep and the shorter final
+        # sleep near 0.25 s; neither permits an early or extra direction write.
+        chair.time += seconds - 0.001 if seconds > 0.01 else seconds
+        report(chair, 1, 6 if progress else 5)
+        await asyncio.sleep(0)
+
+    chair.controller._sleep = sleep
+    await chair.controller.step_position(1, 1)
+
+    assert chair.time == pytest.approx(0.25)
+    assert len(directions(chair)) == 3
+    assert len(stops(chair)) == 1
+    trace = chair.controller.tap_requests[-1]
+    assert [record["seconds"] for record in trace["direction_write_log"]] == [0, 0.1, 0.2]
+    assert trace["stop"]["seconds"] == 0.25
+    assert trace["startup_extended"] is False
+
+
+@pytest.mark.parametrize("feedback", ["reverse", "out_of_bounds", "stale"])
+async def test_timed_backrest_preserves_feedback_guards(chair, feedback):
+    prepare(chair, index=1, position=5)
+    if feedback == "stale":
+        chair.controller._stale_after = 0.01
+    else:
+        chair.on_sleep = lambda: report(chair, 1, 3 if feedback == "reverse" else 23)
+
+    with pytest.raises(ControlError, match="Fresh|Unexpected position"):
+        await chair.controller.step_position(1, 1)
+
+    assert len(directions(chair)) == 1
+    assert len(stops(chair)) == (0 if feedback == "stale" else 1)
+    assert chair.controller.tap_requests[-1]["outcome"] == "failed"
+    assert chair.controller._needs_stop is (feedback == "stale")
+
+
+async def test_timed_backrest_failed_stop_requires_handoff_before_next_wake(chair):
+    prepare(chair, index=1, position=5)
+
+    def fail_stop(packet):
+        if packet[13:17] == b"\x80" * 4:
+            raise OSError("stop delivery is uncertain")
+
+    chair.on_write = fail_stop
+    with pytest.raises(ControlError, match="not retried"):
+        await chair.controller.step_position(1, 1)
+    assert chair.controller._needs_stop
+    assert len(directions(chair)) == 3
+    count = len(chair.writes)
+    with pytest.raises(ControlError, match="not retried"):
+        await chair.controller.turn_on()
+    assert len(chair.writes) == count + 1
+    assert chair.writes[-1][13:17] == b"\x80" * 4
+
+    chair.on_write = None
+    count = len(chair.writes)
+    await chair.controller.turn_on()
+    assert chair.writes[count][13:17] == b"\x80" * 4
+    assert chair.writes[count + 1][5] == 0x11
 
 
 @pytest.mark.parametrize("other_axis_moves", [False, True])

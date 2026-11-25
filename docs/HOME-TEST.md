@@ -1,45 +1,41 @@
-# Backrest recovery check — 1.1.0rc10
+# Quarter-second backrest check — 1.1.0rc11
 
-The owner reported that rc9's 50 ms backrest taps produced no movement or error,
-while the backrest slider still worked. This candidate restores the exact rc8
-controller behavior: a **0.1-second normal backrest pulse** with bounded startup
-waiting. It does not fix the previously excessive adjustment size or establish
-a smaller physical step. The firmware cause remains unverified.
+This candidate uses a **fixed 0.25-second backrest pulse for an isolated press**.
+It does not extend the pulse to wait for a reported position increment. Its
+physical response still needs confirmation; the requested timing does not
+guarantee a fixed step or establish that the excessive adjustment size is resolved.
+The earlier 50 ms candidate produced no movement while the slider worked, but
+the firmware cause remains unverified.
 
 **Seat tilt up** and **Seat tilt down** remain under Controls with their original
-entity identities and 0.25-second normal pulse. Home handling and wake timing are
-unchanged. Version 1.0.2 remains the stable release.
+entity identities and 0.25-second normal pulse. Headrest and footrest retain
+half-second normal pulses. These three axes retain startup waiting until the
+first forward report or the two-second deadline if needed. Home handling and its
+separate 0.25-second wake interval are unchanged. Version 1.0.2 remains stable.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc10.zip` and replace
+1. Extract `svago-home-assistant-1.1.0rc11.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready** and check that diagnostics report
-   `1.1.0rc10`.
+   `1.1.0rc11`.
 
-## Confirm backrest responds again
+## Observe one backrest press
 
 From a comfortable position away from the chosen direction's endpoint, press
 **Backrest recline** or **Backrest upright** once. Observe whether it moves and
-stops. A normal pulse is 0.1 seconds,
-but without forward position feedback it can continue until the first forward
-report or the two-second startup deadline. An observed endpoint is a quiet
-no-op. Do not infer a fixed physical step from the nominal pulse duration.
+stops, and whether the adjustment is suitable. This is a timed quarter-second
+pulse, not a request for a particular angle or position increment. An observed
+endpoint remains a quiet no-op.
 
-After that single press finishes, download diagnostics immediately from the
-Svago device/integration page, before sending another control. Report which
-backrest button was pressed, whether it moved and stopped, and whether the
-adjustment was still too large. One working press provides fresh evidence for
-further timing investigation. If it still does not respond, capture that result
-instead; a successful write alone does not prove movement.
-
-Only this response check is requested. No repeated Home, seat or long
-Continuous-timer tests are needed for this recovery candidate. Stop remains
-available to interrupt movement. Repeated direction presses join one burst with
-a three-second overall cap and cannot extend the two-second no-progress deadline.
+Stop, reversal and replacement controls retain their interruption behavior.
+Repeated presses in the same direction join one burst with a three-second cap.
+For an isolated pulse, let the first press finish before choosing another.
+The successful Home checks do not need repeating; seat and long Continuous-timer
+checks are outside this candidate's scope.
 
 ## Retained Home evidence and behavior
 
@@ -57,8 +53,8 @@ clears a waiting choice. Stop interrupts Home and discards the waiting action.
 Home failure, timeout, stale feedback, disconnect or unload discard waiting
 actions without replaying them later.
 
-The first foreground wake after HA Home retains the 0.25-second interval and
-requires a fresh report afterward, with a 3.25-second default maximum wait.
+The first foreground wake after HA Home retains the separate 0.25-second interval
+and requires a fresh report afterward, with a 3.25-second default maximum wait.
 Physical controller or remote Off does not itself arm the interval; startup
 reliability through that path remains unresolved. **Wired controller (estimated)**
 is an action-based estimate, not measured power feedback.
