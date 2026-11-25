@@ -19,10 +19,6 @@ This release includes fixes found during internal testing:
 - Lumbar adjustments count Bluetooth delays toward their three-second limit, with
   release and Stop handling when delivery is interrupted.
 
-The automatic reconnection fix from 1.0.1 is retained. The side dial's native
-return-to-neutral command has not been identified, so this release does not add
-that button.
-
 ## Install and connect
 
 Requires Home Assistant 2026.10.0 or newer.
