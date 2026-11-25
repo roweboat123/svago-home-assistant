@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.1 — 2026-11-25
+
+- Delay saved Continuous preference changes until a queued heat or massage timer
+  choice can run. Stop, failed Home, replacement, cancellation and reconnect can
+  discard a waiting choice without changing saved preferences.
+- Keep an active renewal session running when a queued finite timer selection is
+  cancelled. Retire it and clear Continuous only when the validated timer command
+  is ready for dispatch.
+- Preserve newer timer choices superseding queued Continuous selections and
+  arming Continuous while a function is off without starting it.
+
+Direction pulses, the post-Home wake interval and memory storage retain their
+1.1.0 behavior. See [release notes](docs/RELEASE_NOTES-1.1.1.md) and
+[validation](VALIDATION.md).
+
 ## 1.1.0 — 2026-11-25
 
 Stable release of the confirmed 1.1.0rc14 behavior, with no control changes.

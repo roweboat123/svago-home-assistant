@@ -294,3 +294,76 @@ async def test_repeated_home_joins_cycle_and_replaces_pending_action(held_home):
     with pytest.raises(CommandSuperseded):
         await pending
     assert chair.writes == [CAPTURED_HOME]
+
+
+def queue_timer_choice(chair, kind, continuous):
+    if continuous:
+        return chair.launch(getattr(chair.controller, f"set_{kind}_continuous")())
+    return chair.launch(chair.controller.set_timer(kind, 120 if kind == "heat" else 30))
+
+
+@pytest.mark.parametrize("kind", ["heat", "massage"])
+@pytest.mark.parametrize("continuous", [False, True])
+@pytest.mark.parametrize("discard", ["stop", "failed_home", "replaced", "reconnect", "cancel"])
+async def test_discarded_home_waiter_never_changes_either_timer(
+    held_home, kind, continuous, discard
+):
+    chair = held_home
+    controller = chair.controller
+    original = {"heat": True, "massage": True, kind: not continuous}
+    controller.restore_timer_preferences(original)
+    commits = []
+    controller._preferences_changed = commits.append
+    home = await chair.start_home()
+    timer = queue_timer_choice(chair, kind, continuous)
+    await asyncio.sleep(0)
+    assert not timer.done() and chair.writes == [CAPTURED_HOME]
+    assert controller.timer_preferences == original and not commits
+
+    if discard == "stop":
+        await controller.stop_movement()
+    elif discard == "failed_home":
+        chair.report(positions=(100, 0, 0, 0))
+    elif discard == "replaced":
+        # A repeated Home drops the timer but doesn't dispatch another packet.
+        chair.launch(controller.return_home())
+        await asyncio.sleep(0)
+    elif discard == "reconnect":
+        controller.set_connected(False)
+        controller.set_connected(True)
+        chair.report()
+    else:
+        timer.cancel()
+    chair.release.set()
+    _, timer_result = await asyncio.wait_for(asyncio.gather(home, timer, return_exceptions=True), 1)
+    expected = {"failed_home": ControlError, "cancel": asyncio.CancelledError}
+    assert isinstance(timer_result, expected.get(discard, CommandSuperseded))
+    assert controller.timer_preferences == original and not commits
+    assert all(packet[13:17] == b"\x80" * 4 for packet in chair.writes[1:])
+    assert not controller.heat_renewal_diagnostics["active"]
+    assert not controller.massage_renewal_diagnostics["active"]
+
+
+@pytest.mark.parametrize("kind", ["heat", "massage"])
+@pytest.mark.parametrize("continuous", [False, True])
+async def test_timer_choice_commits_once_after_verified_home(held_home, kind, continuous):
+    chair = held_home
+    controller = chair.controller
+    original = {"heat": True, "massage": True, kind: not continuous}
+    controller.restore_timer_preferences(original)
+    commits = []
+    controller._preferences_changed = lambda choices: commits.append(
+        (choices, controller.last_home_request["outcome"])
+    )
+    home = await chair.start_home()
+    timer = queue_timer_choice(chair, kind, continuous)
+    await asyncio.sleep(0)
+    assert not timer.done() and controller.timer_preferences == original and not commits
+    chair.release.set()
+    await asyncio.wait_for(asyncio.gather(home, timer), 1)
+    assert commits == [(original | {kind: continuous}, "reported_neutral")]
+    if continuous:
+        assert chair.writes == [CAPTURED_HOME]  # Arming when Off is local.
+    else:
+        assert len(chair.writes) == 2
+        assert controller.status.timer_minutes(kind) == (120 if kind == "heat" else 30)

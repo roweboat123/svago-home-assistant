@@ -1,4 +1,4 @@
-# Home and direction controls — 1.1.0
+# Home and direction controls — 1.1.1
 
 Isolated direction presses now use these fixed command durations without extending
 them to wait for a reported position increment:
@@ -10,22 +10,22 @@ them to wait for a reported position increment:
 | Seat | 0.5 seconds |
 | Footrest | 0.5 seconds |
 
-The owner confirmed the headrest and footrest adjustment in rc14; stable 1.1.0
-uses the same control behavior. These command durations do not define a fixed
-physical step or establish compatibility with every chair or firmware. Existing
+The owner confirmed the headrest and footrest adjustment in rc14; stable 1.1.1
+uses the same direction and Home behavior. These command durations do not define
+a fixed physical step or establish compatibility with every chair or firmware. Existing
 entity identities, Home behavior and the separate 0.25-second wake interval are
 retained.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0.zip` and replace
+1. Extract `svago-home-assistant-1.1.1.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage to
    preserve memories and preferences; do not delete and recreate the entry.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready** and check that diagnostics report
-   `1.1.0`.
+   `1.1.1`.
 
 ## Using direction buttons
 

@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0
+# Validation — Svago 1.1.1
 
 ## Scope
 
@@ -7,11 +7,12 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Version 1.1.0 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**1,280 tests** on each, plus Ruff lint and formatting.
+Version 1.1.1 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+**1,306 tests** on each, plus Ruff lint and formatting.
 Five dependency deprecation warnings remain on each version. Checks cover fixed
 pulses in both directions, cadence, joined-tap caps, feedback and interruption
-safeguards. Control behavior is unchanged from the confirmed rc14 build.
+safeguards. Direction-pulse timing, Home movement and the post-Home wake interval
+retain their 1.1.0 behavior.
 Existing checks cover Home completion with only the latest follow-up, Stop and
 failure handling, delayed memory lookup and settings-lock races,
 recall-only targeting, failures before preset writes,
@@ -27,16 +28,31 @@ acknowledgments and elapsed lumbar deadlines. The preceding rc1 baseline passed
 1,033 tests on each Home Assistant version. Reproduce these checks with
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+The 1.1.1 timer fix adds 26 regression cases. Twenty cover heat/massage finite
+and Continuous selections discarded while waiting for Home, including Stop,
+failed Home, replacement, reconnect and cancellation. Four confirm that a timer
+choice changes its saved preference once after verified Home completion. Two
+cancel finite timer selections waiting behind the settings lock and verify that
+the saved choice and existing renewal worker remain intact. Existing tests cover
+newer finite choices superseding queued Continuous selections.
+
+Continuous choices now change saved state only after operation admission. A
+finite choice clears Continuous and retires its worker only after packet
+validation, immediately before dispatch. Delivery may be uncertain if the write
+then fails. Selecting Continuous while a function is off still arms a future
+explicit start without turning it on. These checks use simulated transport and
+feedback; they add no new physical chair or long-duration renewal evidence.
+
 The exact native Home packet was captured from the
 remote and then replayed independently from a phone. The owner confirmed that
 the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0 is the stable release of the owner-confirmed rc14 behavior, with
-no behavioral changes. It includes Return to neutral under Configuration and
-removes the standalone Turn on button. Home's identity, native command and
-completion checks are unchanged from rc14.
+Version 1.1.0 was the stable release of the owner-confirmed rc14 behavior, with
+no behavioral changes. It included Return to neutral under Configuration and
+removed the standalone Turn on button. Version 1.1.1 retains Home's identity,
+native command and completion checks from rc14.
 
 This release retains rc7's recall-only action for a single Memory button, preserves
 Continuous sessions when a preset fails before its write, and retains the stop
@@ -293,9 +309,10 @@ failure returns to the existing setup or reconnect retry mechanism.
 
 ## Recorded limits and release checks
 
-The owner confirmed rc14's requested headrest and footrest adjustment, and 1.1.0
-retains its control behavior. The [Home and direction guide](docs/HOME-TEST.md)
-records the released timings and successful Home checks; promotion to stable does
+The owner confirmed rc14's requested headrest and footrest adjustment, and 1.1.1
+retains its direction and Home behavior. The
+[Home and direction guide](docs/HOME-TEST.md) records the released timings and
+successful Home checks; promotion to stable does
 not require repeating those checks. These reports do not establish a calibrated
 physical step, every chair/firmware combination, or the longer Continuous timing
 combinations described above.

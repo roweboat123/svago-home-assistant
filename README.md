@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0** — stable release.
+Version **1.1.1** — stable release.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,27 +9,19 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0
+## What's new in 1.1.1
 
-- **Return to neutral** runs the chair's native Home operation from Configuration,
-  stops active Continuous renewal and preserves saved choices and memory slots.
-- Controls selected during Home wait for completion. Only the latest choice runs;
-  **Stop movement** interrupts Home immediately and discards the waiting action.
-- Actions that need the controller awake activate it automatically. The first wake
-  after Home waits 0.25 seconds and requires fresh feedback before its requested
-  action. The separate **Turn on** button is removed.
-- Direction buttons use fixed pulses: **0.5 seconds** for headrest, seat and
-  footrest; **0.3 seconds** for backrest. **Seat tilt up/down** are available under
-  Controls. Presses do not extend to wait for a position increment.
-- **Wired controller (estimated)** shows On, Off or Unknown from HA actions. It
-  does not measure controller power and can be wrong after physical controls are used.
-- **Recall saved memory** (`svago.recall_memory`) gives automations a recall-only
-  action. Ordinary Memory buttons retain their save/recall behavior.
-- Preset failures before dispatch preserve Continuous sessions. An uncertain final
-  slider release retains the requirement to stop before the next control.
+- Heat and massage timer choices waiting behind Home or another setting leave
+  saved Continuous preferences unchanged until the request can run. A discarded
+  waiting request does not change those preferences.
+- A finite timer selection stops Continuous renewal only when its validated
+  command is ready to be sent. Cancelling it while queued preserves the running
+  renewal session.
+- Selecting Continuous while heat or massage is off still arms a future explicit
+  start without turning that function on.
 
 Existing memories and timer preferences are retained when upgrading. Fresh
-installations start with empty memory slots. See the [release notes](docs/RELEASE_NOTES-1.1.0.md)
+installations start with empty memory slots. See the [release notes](docs/RELEASE_NOTES-1.1.1.md)
 for upgrade details and [validation record](VALIDATION.md) for tested behavior
 and remaining physical-validation limits.
 

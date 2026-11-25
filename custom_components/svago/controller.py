@@ -115,6 +115,7 @@ class Controller:
         self._transition = asyncio.Lock()
         self._settings_lock = asyncio.Lock()
         self._settings_epoch = 0
+        self._timer_choice_id = {"heat": 0, "massage": 0}
         self._request_id = 0
         self._intent_sequence = 0
         self._superseded: set[asyncio.Task] = set()
@@ -246,6 +247,12 @@ class Controller:
     async def _flush_timer_preferences(self) -> None:
         if self._preferences_flush is not None:
             await self._preferences_flush()
+
+    def _reserve_timer_choice(self, kind: str) -> int:
+        # Supersede a queued Continuous selection without touching the current
+        # preference or its renewal worker until a replacement can actually run.
+        self._timer_choice_id[kind] += 1
+        return self._timer_choice_id[kind]
 
     @property
     def massage_renewal_diagnostics(self) -> dict:
@@ -1320,15 +1327,15 @@ class Controller:
 
     async def set_massage_continuous(self) -> None:
         """Select Continuous, arming only an explicit future start when Off."""
-        self._current(self._generation)
-        self._stop_massage_session("selected")
-        self._massage_continuous = True
-        self._preferences_changed(self.timer_preferences)
-        session = self._massage_session
-        self._changed()
+        choice = self._reserve_timer_choice("massage")
         async with self._serialized_operation() as generation:
-            if not self._massage_continuous or session != self._massage_session:
+            if choice != self._timer_choice_id["massage"]:
                 return
+            self._stop_massage_session("selected")
+            self._massage_continuous = True
+            self._preferences_changed(self.timer_preferences)
+            session = self._massage_session
+            self._changed()
             await self._flush_timer_preferences()
             if not self._massage_continuous or session != self._massage_session:
                 return
@@ -1450,15 +1457,15 @@ class Controller:
 
     async def set_heat_continuous(self) -> None:
         """Select Continuous without turning on an idle heater."""
-        self._current(self._generation)
-        self._stop_heat_session("selected")
-        self._heat_continuous = True
-        self._preferences_changed(self.timer_preferences)
-        session = self._heat_session
-        self._changed()
+        choice = self._reserve_timer_choice("heat")
         async with self._serialized_operation() as generation:
-            if not self._heat_continuous or session != self._heat_session:
+            if choice != self._timer_choice_id["heat"]:
                 return
+            self._stop_heat_session("selected")
+            self._heat_continuous = True
+            self._preferences_changed(self.timer_preferences)
+            session = self._heat_session
+            self._changed()
             await self._flush_timer_preferences()
             if not self._heat_continuous or session != self._heat_session:
                 return
@@ -1625,19 +1632,18 @@ class Controller:
             or minutes not in TIMER_OPTIONS[kind]
         ):
             raise ControlError("Choose one of the supported timer durations.")
-        if kind == "massage":
-            self._stop_massage_session("finite_timer_selected", clear_selection=True)
-        else:
-            self._stop_heat_session("finite_timer_selected", clear_selection=True)
+        self._reserve_timer_choice(kind)
+        stop_session = self._stop_massage_session if kind == "massage" else self._stop_heat_session
         await self._set_setting(
             f"{kind}_timer",
             minutes,
             {"timer": kind, "minutes": minutes},
             lambda status: status.timer_minutes(kind) == minutes,
+            on_dispatch=lambda: stop_session("finite_timer_selected", clear_selection=True),
         )
         await self._flush_timer_preferences()
 
-    async def _set_setting(self, name, requested, changes, matches) -> None:
+    async def _set_setting(self, name, requested, changes, matches, *, on_dispatch=None) -> None:
         """Apply one setting and require new feedback without turning a function on."""
         trace = {"setting": name, "requested": requested, "outcome": "pending"}
         self.setting_requests.append(trace)
@@ -1651,6 +1657,10 @@ class Controller:
                     raise ControlError(str(exc)) from exc
                 trace["command_hex"] = payload.hex().upper()
                 sequence = self._status_sequence
+                if on_dispatch is not None:
+                    # The validated packet can now be sent; a transport failure
+                    # after this point cannot prove that delivery did not occur.
+                    on_dispatch()
                 await self._write_packet(payload)
                 trace["outcome"] = "waiting_for_status"
                 await self._wait_for(

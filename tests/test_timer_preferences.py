@@ -336,6 +336,33 @@ async def test_finite_selection_persists_only_its_choice_off(
     assert chair.controller.timer_preferences == expected
 
 
+@pytest.mark.parametrize("kind,minutes", [("heat", 120), ("massage", 30)])
+async def test_cancelled_finite_waiter_keeps_running_session_and_saved_choice(
+    persisted_chair, preferences_hass, kind, minutes
+):
+    chair, store = persisted_chair
+    controller = chair.controller
+    await getattr(controller, f"set_{kind}_continuous")()
+    if kind == "massage":
+        await controller.set_massage("Gentle")
+    worker = getattr(controller, f"_{kind}_renewal_task")
+    assert worker is not None and not worker.done()
+    writes = len(chair.writes)
+    choices = controller.timer_preferences
+    async with controller._settings_lock:
+        pending = asyncio.create_task(controller.set_timer(kind, minutes))
+        await asyncio.sleep(0)
+        assert not pending.done()
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+    await store.async_flush()
+    assert (await read_disk(preferences_hass))["continuous"] == choices
+    assert getattr(controller, f"_{kind}_renewal_task") is worker and not worker.done()
+    assert controller.timer_preferences == choices
+    assert len(chair.writes) == writes
+
+
 @pytest.mark.parametrize("action", ["memory", "preset"])
 async def test_memory_or_native_preset_keeps_its_finite_timers_authoritative(
     persisted_chair, preferences_hass, action
