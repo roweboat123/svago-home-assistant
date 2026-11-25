@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc9
+# Validation — Svago 1.1.0rc10
 
 ## Scope
 
@@ -7,11 +7,11 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Version 1.1.0rc9 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**1,199 tests** on each, plus Ruff lint and formatting.
-Five dependency deprecation warnings remain on each version. New checks exercise
-timed backrest release without progress, joined-tap timing and safety limits,
-and restored seat entities with their original identities and direction mapping.
+Version 1.1.0rc10 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+**1,182 tests** on each, plus Ruff lint and formatting.
+Five dependency deprecation warnings remain on each version. Checks cover the
+restored rc8 backrest pulse and startup behavior, joined-tap safety limits, and
+retained seat entities with their original identities and direction mapping.
 Existing checks cover Home completion with only the latest follow-up, Stop and
 failure handling, delayed memory lookup and settings-lock races,
 recall-only targeting, failures before preset writes,
@@ -34,7 +34,7 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc9 retains Return to neutral under Configuration and the removal of
+Version 1.1.0rc10 retains Return to neutral under Configuration and the removal of
 the standalone Turn on button. Home's entity identity, native command and completion
 checks are unchanged. This remains a release candidate; 1.0.2 is the latest
 stable release.
@@ -45,13 +45,16 @@ requirement when a slider's final release delivery is uncertain. The new action
 does not enter the save path, and existing automations are not converted to it.
 The manual archive includes its YAML action metadata.
 
-Version rc9 retains protected Home completion and changes backrest buttons from
-the nominal 0.1-second pulse to a requested 0.05-second tap. Backrest releases
-without extending its tap for a first position-progress report; physical step
-size is not fixed and need not halve. Headrest and footrest remain at 0.5 seconds,
-and seat remains at 0.25 seconds, with their existing two-second startup deadline.
-The three-second overall burst cap remains. **Seat tilt up** and **Seat tilt down**
-are restored with the original keys and direction mapping; their timing is unchanged.
+The owner reported that rc9's 50 ms backrest taps produced no physical movement
+or error while the backrest slider worked. Version rc10 restores the exact rc8
+controller behavior: a nominal 0.1-second backrest pulse, allowing startup until
+the first forward report or the two-second deadline. Headrest and footrest remain
+at 0.5 seconds, seat remains at 0.25 seconds, and the three-second burst cap remains.
+**Seat tilt up** and **Seat tilt down** retain rc9's original entity keys and
+direction mapping. The firmware cause of the failed 50 ms taps is unverified.
+Restoring responsiveness is the recovery goal; excessive adjustment size and
+smaller physical-step calibration remain unresolved. A fresh diagnostic after
+one working press is needed before further timing changes.
 
 The latest rc7 footrest report contains four no-progress errors across three
 command bursts and one joined press. Writes returned successfully, feedback
@@ -94,8 +97,8 @@ where a half-second footrest press showed no forward feedback while a slider mov
 the same direction commands. This supports a startup-timing hypothesis without
 establishing the cause. That change bounded startup waiting to two seconds and
 kept the three-second absolute burst cap. The owner subsequently confirmed that
-1.1.0rc3 works; the physical cause remains unproven. In rc9, backrest no longer
-extends its tap to wait for progress; the other axes retain startup waiting.
+1.1.0rc3 works; the physical cause remains unproven. Version rc10 restores
+backrest's startup allowance after the unsuccessful rc9 timed-tap experiment.
 
 Before rc3, the owner reported that the first memory press after Home only woke
 the wired controller and the second performed recall, regardless of time spent waiting
@@ -152,6 +155,9 @@ empty-memory setup are also checked during release preparation.
   that holding the side dial and switching the remote Off also return home and
   turn the wired controller Off; controller power is not independently observable
   in the captured status fields.
+- The owner reported no backrest movement or error from rc9's 50 ms taps while
+  the backrest slider worked. This establishes the unsuccessful candidate result,
+  not its firmware cause; rc10 response still needs confirmation.
 - The owner confirmed seamless reconnection with the power-cycle recovery fix.
   No manual integration reload was needed in the reported successful test.
 - Movement, lumbar, heat on/off and massage controls were exercised on the chair.
@@ -234,12 +240,11 @@ during storage lookup invalidates an older recall. Its integration activity is
 recorded as Recall, but it does not update HA's button last-pressed timestamp;
 neither record proves physical movement.
 
-Backrest taps request 0.05 seconds without waiting for first progress. Headrest
-and footrest use 0.5 seconds, and seat uses 0.25 seconds. Same-direction taps join
-an active burst with a three-second maximum from its start. For headrest, seat
-and footrest, a pulse without forward progress can extend until the first forward
-report or the two-second startup deadline. Joined presses cannot extend that
-deadline; no progress produces a release and an explicit failure on those axes.
+Backrest taps normally use 0.1 seconds, headrest and footrest use 0.5 seconds,
+and seat uses 0.25 seconds. Same-direction taps join an active burst with a
+three-second maximum from its start. A pulse without forward progress can extend
+until the first forward report or the two-second startup deadline. Joined presses
+cannot extend that deadline; no progress produces a release and an explicit failure.
 Reverse, another axis, a slider, memory or Stop use the
 existing stop-before-handoff behavior. Observed endpoints and already-reached
 slider targets are quiet no-ops. Genuine transport, feedback and stop failures
@@ -270,18 +275,20 @@ failure returns to the existing setup or reconnect retry mechanism.
 
 ## Recorded limits and release checks
 
-The shorter backrest tap and restored seat controls need rc9 chair checks. The
-[candidate guide](docs/HOME-TEST.md) focuses on these adjustments without repeating
-the successful rc8 Home checks; unrelated long Continuous timing tests are not
-part of this check.
+The [candidate guide](docs/HOME-TEST.md) asks only whether backrest responds again
+and how to capture diagnostics immediately after one working press. It does not
+claim a calibrated smaller step or ask to repeat the successful rc8 Home checks.
+Seat's restored controls retain their existing physical-validation status;
+unrelated long Continuous timing tests are not part of this recovery check.
 That extra settling interval is armed by a Home command from HA. Physical
 controller or remote Off is not detected and does not itself arm the interval;
 startup reliability through that path remains unresolved.
 
 The successful rc8 checks do not establish repeated Home, every subsequent
-control after Stop, or every comfort/settings handoff. The [Home guide](docs/HOME-TEST.md)
-retains optional checks for collecting additional evidence. Longer renewal schedules and combined
-heat/massage behavior retain their existing physical-validation limits.
+control after Stop, or every comfort/settings handoff. Those remain recorded
+limits; they are not part of the requested backrest recovery check. Longer renewal
+schedules and combined heat/massage behavior retain their existing
+physical-validation limits.
 
 Require successful configured GitHub validation workflows for the exact source
 revision before publishing a stable release.

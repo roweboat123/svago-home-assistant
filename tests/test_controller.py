@@ -120,11 +120,13 @@ async def test_directional_step_leaves_other_motors_untouched_then_releases(
     assert chair.writes[1][19] == 2
     boundary = OBSERVED_BOUNDS[index][1 if direction > 0 else 0]
     remaining = abs(boundary - before.positions[index])
-    allowed_increments = ((5, 1, 3, 5)[index],)
+    allowed_increments = (1, 2) if index == 1 else ((5, 1, 3, 5)[index],)
     increments = len(chair.writes) - 2
+    # The real-clock deadline can shorten the fake clock's first sleep slightly,
+    # permitting a final repeat just before the nominal 0.1 s boundary.
     assert increments in {min(count, remaining) for count in allowed_increments}
     if index == 1:
-        assert chair.time == pytest.approx(0.05)
+        assert chair.time == pytest.approx(0.1)
     assert chair.writes[-1][13:17] == b"\x80" * 4
     positions = list(before.positions)
     positions[index] += direction * increments
@@ -285,7 +287,7 @@ async def test_stale_mid_burst_does_not_write_old_heat(chair):
     "index,name,duration,write_times",
     [
         (0, "headrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
-        (1, "backrest", 0.05, [0]),
+        (1, "backrest", 0.1, [0]),
         (2, "seat", 0.25, [0, 0.1, 0.2]),
         (3, "footrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
     ],

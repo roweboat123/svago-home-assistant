@@ -28,9 +28,8 @@ from .protocol import (
 _LOGGER = logging.getLogger(__name__)
 # Headrest and footrest use the physically confirmed longer burst after
 # nonresponsive 0.25 s presses. Shorten the backrest's nominal pulse for finer
-# adjustment without extending it to wait for quantized position feedback;
-# seat retains 0.25 s and other axes keep their startup feedback allowance.
-MOTOR_PULSE_SECONDS = (0.5, 0.05, 0.25, 0.5)
+# adjustment; seat retains 0.25 s. Startup feedback guards still apply.
+MOTOR_PULSE_SECONDS = (0.5, 0.1, 0.25, 0.5)
 MOTOR_REPEAT_SECONDS = 0.1
 LUMBAR_BURST_SECONDS = 3.0
 # Repeated taps extend the current gesture, never a backlog of future travel.
@@ -1780,13 +1779,9 @@ class Controller:
 
     @staticmethod
     def _tap_deadline(session: dict, *, wall: bool = False) -> float:
-        """Timed taps use their pulse deadline; other taps have a startup limit."""
+        """A joined press cannot extend the no-progress startup limit."""
         prefix = "wall_" if wall else ""
-        key = (
-            "deadline"
-            if session["progress_observed"] or not session["require_startup_progress"]
-            else "startup_deadline"
-        )
+        key = "deadline" if session["progress_observed"] else "startup_deadline"
         return session[f"{prefix}{key}"]
 
     def _observe_tap_feedback(self, status: Status, received_at: float) -> None:
@@ -1821,7 +1816,7 @@ class Controller:
                 session["progress_observed"] = True
                 trace["first_progress_seconds"] = round(elapsed, 3)
                 trace["startup_outcome"] = "progress_observed"
-                if session["require_startup_progress"] and (
+                if (
                     received_at >= session["deadline"]
                     or asyncio.get_running_loop().time() >= session["wall_deadline"]
                 ):
@@ -1971,7 +1966,6 @@ class Controller:
                     wall_hard_deadline=wall_started + MOTOR_BURST_MAX_SECONDS,
                     wall_startup_deadline=wall_started
                     + min(STARTUP_FEEDBACK_SECONDS, MOTOR_BURST_MAX_SECONDS),
-                    require_startup_progress=index != 1,
                     progress_observed=False,
                     start_position=start,
                     best_position=start,
@@ -1979,10 +1973,8 @@ class Controller:
                 )
                 trace["effective_pulse_seconds"] = nominal_seconds
                 trace["maximum_burst_seconds"] = MOTOR_BURST_MAX_SECONDS
-                trace["startup_allowance_seconds"] = (
-                    min(STARTUP_FEEDBACK_SECONDS, MOTOR_BURST_MAX_SECONDS)
-                    if session["require_startup_progress"]
-                    else 0
+                trace["startup_allowance_seconds"] = min(
+                    STARTUP_FEEDBACK_SECONDS, MOTOR_BURST_MAX_SECONDS
                 )
                 trace["startup_extended"] = False
                 trace["startup_outcome"] = "pending"
@@ -2001,7 +1993,7 @@ class Controller:
                     nominal_finished = (
                         now >= session["deadline"] or wall_now >= session["wall_deadline"]
                     )
-                    if session["progress_observed"] or not session["require_startup_progress"]:
+                    if session["progress_observed"]:
                         return nominal_finished
                     if nominal_finished:
                         trace["startup_extended"] = True
@@ -2045,43 +2037,20 @@ class Controller:
                                 if position == boundary or pulse_finished():
                                     break
                                 timeout.reschedule(self._tap_deadline(session, wall=True))
-                                repeat_at = self._clock() + MOTOR_REPEAT_SECONDS
-                                wall_repeat_at = (
-                                    asyncio.get_running_loop().time() + MOTOR_REPEAT_SECONDS
-                                )
-                                while True:
-                                    await self._sleep(
-                                        min(
-                                            MOTOR_REPEAT_SECONDS
-                                            if session["require_startup_progress"]
-                                            else max(0, repeat_at - self._clock()),
-                                            max(0, self._tap_deadline(session) - self._clock()),
-                                            max(
-                                                0,
-                                                self._tap_deadline(session, wall=True)
-                                                - asyncio.get_running_loop().time(),
-                                            ),
-                                        )
+                                await self._sleep(
+                                    min(
+                                        MOTOR_REPEAT_SECONDS,
+                                        max(0, self._tap_deadline(session) - self._clock()),
+                                        max(
+                                            0,
+                                            self._tap_deadline(session, wall=True)
+                                            - asyncio.get_running_loop().time(),
+                                        ),
                                     )
-                                    if session["require_startup_progress"]:
-                                        break
-                                    # A clipped sleep or joined press must not
-                                    # repeat a short timed tap before the normal
-                                    # direction-write interval has elapsed.
-                                    position = checked_feedback()
-                                    if (
-                                        position == boundary
-                                        or pulse_finished()
-                                        or self._clock() >= repeat_at
-                                        or asyncio.get_running_loop().time() >= wall_repeat_at
-                                    ):
-                                        break
+                                )
                             else:
                                 checked_feedback()
-                                if (
-                                    session["require_startup_progress"]
-                                    and not session["progress_observed"]
-                                ):
+                                if not session["progress_observed"]:
                                     trace["startup_outcome"] = "no_progress"
                                     raise ControlError(
                                         "The chair did not report movement in the requested direction "
@@ -2101,7 +2070,7 @@ class Controller:
                         # expired while sleep was pending. Inspect it once;
                         # never resend a direction after the deadline.
                         checked_feedback()
-                        if session["require_startup_progress"] and not session["progress_observed"]:
+                        if not session["progress_observed"]:
                             trace["startup_outcome"] = "no_progress"
                             raise ControlError(
                                 "The chair did not report movement in the requested direction "
@@ -2111,8 +2080,6 @@ class Controller:
                     session["accepting"] = False
                     await self._tap_stop(generation, trace, requested_at, best_effort=True)
                     raise
-                if not session["require_startup_progress"] and not session["progress_observed"]:
-                    trace["startup_outcome"] = "not_observed_during_timed_pulse"
                 session["accepting"] = False
                 # A returned release is not proof of physical movement.
                 await self._tap_stop(generation, trace, requested_at)

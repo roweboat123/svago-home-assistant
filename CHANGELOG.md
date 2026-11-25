@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0rc10 — 2026-11-24
+
+- Restore rc8's backrest behavior: a nominal 0.1-second pulse with startup waiting
+  until first forward feedback, bounded by two seconds when needed. The overall
+  burst cap remains three seconds.
+- Retain rc9's **Seat tilt up** and **Seat tilt down**, their original entity
+  identities, and the confirmed Home handoff behavior.
+- Record the owner's rc9 result: 50 ms backrest taps produced no movement or
+  error, while the slider worked. The firmware cause and smaller physical-step
+  calibration remain unresolved. This recovery candidate does not fix the
+  previously reported excessive adjustment size.
+
+Confirm that backrest responds again and capture diagnostics after one working
+press before further timing changes. Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc9 — 2026-11-24
 
 - Change backrest buttons to a requested 0.05-second tap, releasing without
