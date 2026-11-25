@@ -140,7 +140,7 @@ async def test_only_latest_of_mixed_waiting_controls_dispatches(held_home, lates
         index = {"tap": 3, "backrest_tap": 1, "seat_tap": 2}[latest]
         assert any(packet[13 + index] == 0x82 for packet in chair.writes[1:])
         trace = chair.controller.tap_requests[-1]
-        assert trace["movement_duration_seconds"] == pytest.approx(0.5 if index == 2 else 0.3)
+        assert trace["movement_duration_seconds"] == pytest.approx(0.3 if index == 1 else 0.5)
         assert trace["startup_allowance_seconds"] == 0
         assert trace["startup_extended"] is False
     else:

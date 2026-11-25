@@ -11,10 +11,10 @@ from custom_components.svago.controller import CommandSuperseded, ControlError
 from custom_components.svago.protocol import OBSERVED_BOUNDS, Status, checksum
 
 TIMED_PULSES = (
-    (0, 0.3, [0, 0.1, 0.2]),
+    (0, 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
     (1, 0.3, [0, 0.1, 0.2]),
     (2, 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
-    (3, 0.3, [0, 0.1, 0.2]),
+    (3, 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
 )
 
 
@@ -113,7 +113,7 @@ async def test_captured_direction_packet_stops_before_delayed_integer_progress(
     chair.on_sleep = feedback
     await chair.controller.step_position(index, direction)
 
-    assert chair.time == pytest.approx(0.3)
+    assert chair.time == pytest.approx(0.5)
     packets = directions(chair)
     assert packets and all(packet == packets[0] for packet in packets)
     if expected_hex:
@@ -132,7 +132,7 @@ async def test_captured_direction_packet_stops_before_delayed_integer_progress(
 
 
 @pytest.mark.parametrize(
-    "index,nominal,writes", [(0, 0.3, 3), (1, 0.3, 3), (2, 0.5, 5), (3, 0.3, 3)]
+    "index,nominal,writes", [(0, 0.5, 5), (1, 0.3, 3), (2, 0.5, 5), (3, 0.5, 5)]
 )
 async def test_prompt_progress_keeps_existing_nominal_tap(chair, index, nominal, writes):
     prepare(chair, index=index, position=5)
@@ -279,7 +279,7 @@ async def test_timed_axis_preserves_feedback_guards(chair, index, direction, fee
     assert chair.controller._needs_stop is (feedback == "stale")
 
 
-@pytest.mark.parametrize("index,write_count", [(0, 3), (1, 3), (2, 5), (3, 3)])
+@pytest.mark.parametrize("index,write_count", [(0, 5), (1, 3), (2, 5), (3, 5)])
 async def test_timed_axis_failed_stop_requires_handoff_before_next_wake(chair, index, write_count):
     prepare(chair, index=index, position=5)
 
@@ -314,8 +314,8 @@ async def test_other_axis_progress_does_not_extend_the_requested_pulse(chair, ot
 
     await chair.controller.step_position(3, 1)
 
-    assert chair.time == pytest.approx(0.3)
-    assert len(directions(chair)) == 3
+    assert chair.time == pytest.approx(0.5)
+    assert len(directions(chair)) == 5
     assert len(stops(chair)) == 1
     assert len([packet for packet in chair.writes if packet[5] == 0x11]) == 1
     trace = chair.controller.tap_requests[-1]
@@ -377,7 +377,7 @@ async def test_same_direction_press_keeps_joined_deadline_after_first_progress(c
         gate.feedback = lambda: report(chair, 3, 9)
         gate.finish()
         assert await asyncio.gather(owner, joined) == [None, None]
-        assert chair.time == pytest.approx(joined_at + 0.3)
+        assert chair.time == pytest.approx(joined_at + 0.5)
         assert len(stops(chair)) == 1
         assert len([packet for packet in chair.writes if packet[5] == 0x11]) == 1
     finally:
@@ -499,7 +499,7 @@ async def test_frozen_injected_clock_keeps_wall_deadline_and_repeat_limit(chair)
     chair.controller._sleep = frozen_clock_sleep
     await asyncio.wait_for(chair.controller.step_position(3, 1), 1)
 
-    assert 1 <= len(directions(chair)) <= 3
+    assert 1 <= len(directions(chair)) <= 5
     assert len(stops(chair)) == 1
     assert chair.controller.tap_requests[-1]["startup_outcome"] == "not_observed_during_timed_pulse"
     assert chair.controller._tap_session is None

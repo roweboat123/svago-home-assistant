@@ -101,7 +101,7 @@ async def test_normal_movement_without_home_has_no_settle_delay(chair):
     assert events[0][1][5] == 0x11
     assert events[1][1][13] == 0x82
     assert events[1][0] == events[0][0]
-    assert chair.time == pytest.approx(0.3)
+    assert chair.time == pytest.approx(0.5)
     assert "post_home_settle" not in chair.controller.last_activation
 
 

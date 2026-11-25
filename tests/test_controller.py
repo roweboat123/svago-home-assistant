@@ -120,7 +120,7 @@ async def test_directional_step_leaves_other_motors_untouched_then_releases(
     assert chair.writes[1][19] == 2
     boundary = OBSERVED_BOUNDS[index][1 if direction > 0 else 0]
     remaining = abs(boundary - before.positions[index])
-    expected_increments = min((3, 3, 5, 3)[index], remaining)
+    expected_increments = min((5, 3, 5, 5)[index], remaining)
     increments = len(chair.writes) - 2
     assert increments == expected_increments
     if index == 1:
@@ -284,10 +284,10 @@ async def test_stale_mid_burst_does_not_write_old_heat(chair):
 @pytest.mark.parametrize(
     "index,name,duration,write_times",
     [
-        (0, "headrest", 0.3, [0, 0.1, 0.2]),
+        (0, "headrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
         (1, "backrest", 0.3, [0, 0.1, 0.2]),
         (2, "seat", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
-        (3, "footrest", 0.3, [0, 0.1, 0.2]),
+        (3, "footrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
     ],
 )
 @pytest.mark.parametrize("direction", [-1, 1])
@@ -458,7 +458,7 @@ async def test_diagnostic_headrest_four_uses_direction_instead_of_target_five(ch
     await chair.controller.step_position(0, 1)
     assert chair.writes[1][13:17] == b"\x82\x8f\x8f\x8f"
     assert chair.writes[1][6:13] == b"\x00" * 7
-    assert chair.controller.status.positions == (7, 0, 0, 0)
+    assert chair.controller.status.positions == (9, 0, 0, 0)
 
 
 @pytest.mark.parametrize("index", [0, 3])
@@ -477,8 +477,8 @@ async def test_timed_press_continues_after_one_unit_and_preserves_latest_heat(ch
 
     chair.on_sleep = progress
     await chair.controller.step_position(index, 1)
-    assert len(chair.writes) == 5
-    assert chair.time == pytest.approx(0.3)
+    assert len(chair.writes) == 7
+    assert chair.time == pytest.approx(0.5)
     assert chair.writes[-1][13:17] == b"\x80" * 4
     assert all(packet[19] == 2 for packet in chair.writes[2:])
     assert chair.writes[-1][8:10] == b"\x00\x00" and chair.writes[-1][19] == 2
@@ -533,10 +533,10 @@ async def test_movement_transport_failure_is_not_retried(chair, index):
 @pytest.mark.parametrize("index", [0, 3])
 async def test_normal_movement_release_failure_is_surfaced(chair, index):
     chair.controller.accept_status(status_with(positions=(5, 6, 16, 10)))
-    chair.fail_at = 5  # Activation, three timed direction writes, then the final stop.
+    chair.fail_at = 7  # Activation, five timed direction writes, then the final stop.
     with pytest.raises(ControlError, match="not retried"):
         await chair.controller.step_position(index, 1)
-    assert len(chair.writes) == 5
+    assert len(chair.writes) == 7
     trace = chair.controller.tap_requests[-1]
     assert trace["outcome"] == "failed"
     assert trace["stop"]["outcome"] == "failed"

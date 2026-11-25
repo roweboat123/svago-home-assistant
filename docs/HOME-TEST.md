@@ -1,37 +1,37 @@
-# Direction-pulse check — 1.1.0rc13
+# Direction-pulse check — 1.1.0rc14
 
 Isolated direction presses now use these fixed command durations without extending
 them to wait for a reported position increment:
 
 | Axis | Pulse |
 | --- | --- |
-| Headrest | 0.3 seconds |
+| Headrest | 0.5 seconds |
 | Backrest | 0.3 seconds |
 | Seat | 0.5 seconds |
-| Footrest | 0.3 seconds |
+| Footrest | 0.5 seconds |
 
-The earlier 0.25-second backrest pulse was confirmed suitable, and the owner found
-rc12's quarter-second seat pulse too short. The new durations still need chair
-confirmation. They do not define a fixed physical step. Entity identities,
-Home behavior and the separate 0.25-second wake interval are unchanged.
-Version 1.0.2 remains stable.
+Headrest and footrest increase from 0.3 to 0.5 seconds; their new response still
+needs chair confirmation. Backrest and seat timings are unchanged. These command
+durations do not define a fixed physical step. Entity identities, Home behavior
+and the separate 0.25-second wake interval are unchanged. Version 1.0.2 remains
+stable.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc13.zip` and replace
+1. Extract `svago-home-assistant-1.1.0rc14.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready** and check that diagnostics report
-   `1.1.0rc13`.
+   `1.1.0rc14`.
 
-## Observe isolated direction presses
+## Observe headrest and footrest presses
 
 From a comfortable position away from the chosen direction's endpoint, press a
-direction button once. Observe whether it moves and stops, and whether the
-adjustment is suitable. Let that press finish before choosing another direction
-or axis. The pulse specifies a command duration, not an angle or position
+headrest or footrest direction button once. Observe whether it moves and stops,
+and whether the adjustment is suitable. Let that press finish before choosing
+another direction or axis. The pulse specifies a command duration, not an angle or position
 increment. An observed endpoint remains a quiet no-op.
 
 Stop, reversal and replacement controls retain their interruption behavior.

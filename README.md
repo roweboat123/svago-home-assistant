@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc13** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc14** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,14 +9,13 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc13
+## What's new in 1.1.0rc14
 
-Headrest, backrest and footrest buttons now use **fixed 0.3-second pulses**;
-**Seat tilt up** and **Seat tilt down** use **fixed 0.5-second pulses**. An isolated
-press does not extend to wait for a reported position increment. These new timings
-still need a chair check. The earlier 0.25-second backrest press was confirmed
-suitable, while the quarter-second seat pulse was too short. Pulse duration does
-not define a fixed physical step, and entity identities are unchanged.
+Headrest and footrest buttons now use **fixed 0.5-second pulses**, increased from
+0.3 seconds. Backrest remains at **0.3 seconds** and seat at **0.5 seconds**. An
+isolated press does not extend to wait for a reported position increment. The new
+headrest and footrest response still needs a chair check. Pulse duration does not
+define a fixed physical step, and entity identities are unchanged.
 
 The owner confirmed rc8's queued Footrest raise, one-press Memory 3 recall,
 latest-choice replacement and Stop cancellation during Home. A fresh Footrest
@@ -94,8 +93,8 @@ Replace the `custom_components/svago` folder and restart Home Assistant. Keep yo
 Other controls appear under **Controls**. The diagnostic sensors appear under
 **Diagnostics**.
 
-Direction buttons stop automatically. An isolated headrest, backrest or footrest
-press uses a fixed 0.3-second pulse; seat uses a fixed 0.5-second pulse. No direction
+Direction buttons stop automatically. An isolated headrest, seat or footrest press
+uses a fixed 0.5-second pulse; backrest uses a fixed 0.3-second pulse. No direction
 button extends its pulse to wait for position progress. Repeating the same
 direction extends one burst, with a three-second total cap. Stop, a reversal or
 another adjustment takes over after releasing the old command.

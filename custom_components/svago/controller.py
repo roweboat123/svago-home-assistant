@@ -27,8 +27,8 @@ from .protocol import (
 
 _LOGGER = logging.getLogger(__name__)
 # Direction buttons use fixed timed pulses, without extending them to wait
-# for quantized position feedback. Seat receives the longer half-second pulse.
-MOTOR_PULSE_SECONDS = (0.3, 0.3, 0.5, 0.3)
+# for quantized position feedback. Backrest uses 0.3 s; other axes use 0.5 s.
+MOTOR_PULSE_SECONDS = (0.5, 0.3, 0.5, 0.5)
 MOTOR_REPEAT_SECONDS = 0.1
 LUMBAR_BURST_SECONDS = 3.0
 # Repeated taps extend the current gesture, never a backlog of future travel.

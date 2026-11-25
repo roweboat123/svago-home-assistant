@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0rc14 — 2026-11-24
+
+- Increase fixed headrest and footrest pulses from 0.3 to 0.5 seconds. Keep backrest
+  at 0.3 seconds and seat at 0.5 seconds; no axis extends an isolated press to wait
+  for a reported position increment.
+- Retain the three-second joined-burst cap, Home behavior, separate quarter-second
+  wake interval, feedback safeguards and existing entity identities.
+
+The new headrest and footrest response remains pending a chair check. Pulse
+duration does not define a fixed physical step. Version 1.0.2 remains the latest
+stable release.
+
 ## 1.1.0rc13 — 2026-11-24
 
 - Use fixed 0.3-second headrest, backrest and footrest pulses, and fixed 0.5-second

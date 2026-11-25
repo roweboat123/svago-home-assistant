@@ -75,7 +75,7 @@ def stops(chair):
     return [packet for packet in chair.writes if packet[13:17] == b"\x80" * 4]
 
 
-@pytest.mark.parametrize("index,pulse", [(0, 0.3), (1, 0.3), (2, 0.5), (3, 0.3)])
+@pytest.mark.parametrize("index,pulse", [(0, 0.5), (1, 0.3), (2, 0.5), (3, 0.5)])
 async def test_same_direction_extends_one_gesture_without_extra_activation_or_stop(
     chair, index, pulse
 ):
@@ -103,7 +103,7 @@ async def test_same_direction_extends_one_gesture_without_extra_activation_or_st
 
 
 @pytest.mark.parametrize(
-    "index,end_time,write_count", [(0, 0.4, 4), (1, 0.4, 4), (2, 0.6, 6), (3, 0.4, 4)]
+    "index,end_time,write_count", [(0, 0.6, 6), (1, 0.4, 4), (2, 0.6, 6), (3, 0.6, 6)]
 )
 @pytest.mark.parametrize("direction", [-1, 1])
 async def test_join_without_progress_extends_only_the_timed_pulse(
@@ -131,13 +131,13 @@ async def test_join_without_progress_extends_only_the_timed_pulse(
     count = len(chair.writes)
     await chair.controller.step_position(index, direction)
     assert chair.writes[count][5] == 0x11
-    assert len(directions(chair)) == write_count + (5 if index == 2 else 3)
+    assert len(directions(chair)) == write_count + (3 if index == 1 else 5)
     assert len(stops(chair)) == 2
     assert chair.controller.tap_requests[-1]["burst_id"] != first["burst_id"]
 
 
 @pytest.mark.parametrize(
-    "index,pulse,short_write_count", [(0, 0.3, 4), (1, 0.3, 4), (2, 0.5, 6), (3, 0.3, 4)]
+    "index,pulse,short_write_count", [(0, 0.5, 6), (1, 0.3, 4), (2, 0.5, 6), (3, 0.5, 6)]
 )
 @pytest.mark.parametrize("presses", [(0.02, 0.06), tuple(index / 40 for index in range(1, 120))])
 async def test_joined_timed_axis_pulses_keep_repeat_interval_and_cap_without_progress(
@@ -256,8 +256,8 @@ async def test_startup_presses_join_activation_without_building_travel_backlog(c
     assert chair.controller._tap_session["trace"]["coalesced_presses"] == 5
     release.set()
     assert await asyncio.gather(owner, *joined) == [None] * 6
-    assert chair.time == pytest.approx(0.3)
-    assert len(directions(chair)) == 3
+    assert chair.time == pytest.approx(0.5)
+    assert len(directions(chair)) == 5
     assert len(stops(chair)) == 1
     assert len([p for p in chair.writes if p[5] == 0x11]) == 1
 
