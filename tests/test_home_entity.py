@@ -1,4 +1,4 @@
-"""Native Home is a normal chair control, independent of saved memory slots."""
+"""Native Home is a configuration button, independent of saved memory slots."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from conftest import status_with
 from homeassistant.components.button import ButtonEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
@@ -59,7 +60,7 @@ async def test_home_setup_and_press_do_not_read_or_write_empty_memory_slots(
     assert button.name == "Return to neutral"
     assert button.unique_id == f"{ADDRESS}_return_home"
     assert HomeButton(connection).unique_id == button.unique_id
-    assert button.entity_category is None
+    assert button.entity_category is EntityCategory.CONFIG
     assert button.available
 
     await button.async_press()

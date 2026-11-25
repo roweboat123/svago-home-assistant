@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc1** — testing candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc2** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,12 +9,12 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc1
+## What's new in 1.1.0rc2
 
-Add **Return to neutral**, using the chair's captured native Home command.
-The owner verified that the exact command returns the chair home while Bluetooth
-stays connected. The new Home Assistant button is ready for on-chair testing;
-see the [testing guide](docs/HOME-TEST.md).
+Move **Return to neutral** to **Configuration** on the device page, alongside
+Turn on and the memory controls. The owner confirmed that the Home Assistant
+button worked in 1.1.0rc1. This update changes its grouping; the native Home
+command and button behavior are unchanged.
 
 The button sends the native command once and waits for fresh feedback showing
 all four reported positions at zero with heat and massage Off. It stops active
@@ -65,7 +65,8 @@ Replace the `custom_components/svago` folder and restart Home Assistant. Keep yo
 | Set memory | Arm one memory save |
 | Turn on | Wake the chair's controller without toggling it off |
 
-**Turn on**, **Memory 1–3** and **Set memory** appear under **Configuration**.
+**Turn on**, **Return to neutral**, **Memory 1–3** and **Set memory** appear under
+**Configuration**.
 Other controls appear under **Controls**. The diagnostic sensors appear under
 **Diagnostics**.
 

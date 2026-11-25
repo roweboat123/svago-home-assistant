@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0rc2 — 2026-11-24
+
+- Move **Return to neutral** from Controls to Configuration, retaining its entity
+  identity, native command and behavior.
+- Record the owner's successful Home Assistant test of 1.1.0rc1. This update
+  changes only the button category, version metadata and documentation.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc1 — 2026-11-24
 
 Testing candidate adding the native **Return to neutral** button.
@@ -10,8 +19,8 @@ Testing candidate adding the native **Return to neutral** button.
 - Stop active Continuous heat and massage renewal while preserving saved choices.
 - Require fresh feedback confirming neutral reported positions and comfort
   functions Off. Retain Stop, replacement, stale-feedback and timeout handling.
-- Export the latest Home request in diagnostics. The new Home Assistant button
-  still needs on-chair validation; see [the testing guide](docs/HOME-TEST.md).
+- Export the latest Home request in diagnostics. This candidate was supplied for
+  on-chair validation; the owner subsequently reported success, as recorded above.
 
 ## 1.0.2 — 2026-11-24
 

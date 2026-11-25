@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc1
+# Validation — Svago 1.1.0rc2
 
 ## Scope
 
@@ -7,7 +7,7 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Local validation passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+Local validation of 1.1.0rc1 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
 **1,033 tests** on each, plus Ruff lint and formatting.
 Five dependency deprecation warnings remain on each version. The 34 added cases
 cover the exact native Home frame, captured nonmonotonic travel, fresh feedback
@@ -17,11 +17,16 @@ diagnostics. Existing tests retain coverage for memory-data preservation, fresh
 comfort acknowledgments and elapsed lumbar deadlines. Reproduce these checks with
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-This is a testing candidate. The exact native Home packet was captured from the
+The exact native Home packet was captured from the
 remote and then replayed independently from a phone. The owner confirmed that
 the chair returned home to neutral, with Bluetooth status notifications
-continuing afterward. The new Home Assistant button still requires an on-chair
-test before a stable release; see [the Home test guide](docs/HOME-TEST.md).
+continuing afterward. The owner subsequently confirmed that the Home Assistant
+button worked in 1.1.0rc1.
+
+Version 1.1.0rc2 moves Return to neutral from Controls to Configuration. Its
+entity identity, command and controller behavior are unchanged. The category
+change does not require repeating the physical test. This remains a release
+candidate; 1.0.2 is the latest stable release.
 
 The owner previously reported completing internal testing of the fixes supplied
 for stable 1.0.2. This candidate retains those fixes.
@@ -45,8 +50,10 @@ empty-memory setup are also checked during release preparation.
   replay. The log contains 329 valid status frames and continued notifications
   after arrival, without a disconnect. Brief movement away from zero occurred
   during the sequence and is allowed by the Home monitor.
-- Heat and massage were already Off during that replay. Their On-to-Off
-  transitions still need testing through the new HA button. The owner confirmed
+- The owner reported a successful Home Assistant button test with 1.1.0rc1.
+  The report did not separately describe Stop during travel, active heat/massage
+  shutoff or wired-controller shutdown through that button.
+- Heat and massage were already Off during the phone replay. The owner confirmed
   that holding the side dial and switching the remote Off also return home and
   turn the wired controller Off; controller power is not independently observable
   in the captured status fields.
@@ -148,13 +155,13 @@ that single uncached attempt; cancellation or unload prevents another connection
 Diagnostics retain the cache-clear result and missing-service error. Persistent
 failure returns to the existing setup or reconnect retry mechanism.
 
-## Remaining physical and release checks
+## Recorded limits and release checks
 
-1. Install this candidate and test Return to neutral, wired-controller shutdown,
-   active heat/massage shutdown and Stop during Home travel using the
-   [Home test guide](docs/HOME-TEST.md).
-2. Check Continuous
-   status changes and a saved-memory recall with Continuous selected.
-3. Observe the longer renewal schedules and combined heat/massage behavior.
-4. Require successful configured GitHub validation workflows for the exact source
-   revision before publishing a stable release.
+The successful HA Home test does not separately establish each interruption or
+comfort-function case. The [Home guide](docs/HOME-TEST.md) retains optional checks
+for collecting that additional evidence, without requiring another chair test
+for this category-only update. Longer renewal schedules and combined
+heat/massage behavior retain their existing physical-validation limits.
+
+Require successful configured GitHub validation workflows for the exact source
+revision before publishing a stable release.

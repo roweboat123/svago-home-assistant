@@ -74,6 +74,7 @@ class HomeButton(SvagoEntity, ButtonEntity):
     """Invoke the captured native shutdown/Home operation."""
 
     _attr_icon = "mdi:seat"
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, connection):
         super().__init__(connection, "return_home", "Return to neutral")
