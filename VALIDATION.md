@@ -1,18 +1,17 @@
-# Validation — Svago 1.1.0rc14
+# Validation — Svago 1.1.0
 
 ## Scope
 
-Prepared November 24, 2026. The integration was developed against a Motion Mastery
+Prepared November 25, 2026. The integration was developed against a Motion Mastery
 chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Version 1.1.0rc14 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+Version 1.1.0 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
 **1,280 tests** on each, plus Ruff lint and formatting.
 Five dependency deprecation warnings remain on each version. Checks cover fixed
-0.5-second headrest/seat/footrest pulses and 0.3-second backrest pulses in both
-directions, write cadence, early sleep returns, joined-tap caps, feedback failures
-and interruption safeguards, plus retained entity identities and direction mapping.
+pulses in both directions, cadence, joined-tap caps, feedback and interruption
+safeguards. Control behavior is unchanged from the confirmed rc14 build.
 Existing checks cover Home completion with only the latest follow-up, Stop and
 failure handling, delayed memory lookup and settings-lock races,
 recall-only targeting, failures before preset writes,
@@ -34,12 +33,12 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc14 retains Return to neutral under Configuration and the removal of
-the standalone Turn on button. Home's entity identity, native command and completion
-checks are unchanged. This remains a release candidate; 1.0.2 is the latest
-stable release.
+Version 1.1.0 is the stable release of the owner-confirmed rc14 behavior, with
+no behavioral changes. It includes Return to neutral under Configuration and
+removes the standalone Turn on button. Home's identity, native command and
+completion checks are unchanged from rc14.
 
-This candidate retains rc7's recall-only action for a single Memory button, preserves
+This release retains rc7's recall-only action for a single Memory button, preserves
 Continuous sessions when a preset fails before its write, and retains the stop
 requirement when a slider's final release delivery is uncertain. The new action
 does not enter the save path, and existing automations are not converted to it.
@@ -56,9 +55,10 @@ The owner found rc12's fixed quarter-second seat pulse too short. Version rc13
 switched every axis to fixed timed pulses. Version rc14 increases headrest and
 footrest from 0.3 to 0.5 seconds, retaining backrest at 0.3 seconds and seat at
 0.5 seconds. None extends to wait for a reported position increment. The new
-headrest and footrest response is pending a chair check. Backrest's 0.3-second
-and seat's 0.5-second response have not been explicitly confirmed; the earlier
-0.25-second backrest approval does not establish the changed duration. The
+headrest and footrest response was subsequently confirmed suitable by the owner
+with rc14. That report validates the requested headrest/footrest adjustment on
+the development chair, without separately establishing every axis or firmware.
+The earlier 0.25-second backrest approval does not establish the changed duration. The
 three-second burst cap, entity identities and direction mapping remain. Earlier
 quarter-second headrest and footrest presses were reported unresponsive. The
 firmware cause of the failed 50 ms backrest taps remains unverified, and
@@ -119,7 +119,7 @@ after Home. One diagnostic capture contains a neutral Memory 1 recall followed
 by a successful nonneutral Memory 3 recall, so it does not capture that failure.
 In a separate controlled check, the owner went directly from Home to Memory 3
 and confirmed that the first press only woke the controller; the second moved it.
-The candidate tracks a Home write attempt, then waits for a fresh report after
+The integration tracks a Home write attempt, then waits for a fresh report after
 a 0.25-second settling interval following the next foreground wake acknowledgment.
 With normal feedback cadence this wait may take about 0.3 seconds; the existing
 three-second stale-feedback limit gives a 3.25-second default total bound on this wait.
@@ -135,11 +135,11 @@ Its role is unconfirmed. The later rc8 check confirmed one-press Memory 3 recall
 selected during Home; this does not establish every automation or startup path.
 
 The owner previously reported completing internal testing of the fixes supplied
-for stable 1.0.2. This candidate retains those fixes.
+for stable 1.0.2. Version 1.1.0 retains those fixes.
 
 The owner confirmed seamless reconnection on the affected chair with `1.0.1rc1`
-after reporting the missing-FFF0 setup error following power loss. Version 1.0.2
-retains the connection code from 1.0.1. This validates recovery on that installation;
+after reporting the missing-FFF0 setup error following power loss. The connection
+code from 1.0.1 is retained in 1.1.0. This validates recovery on that installation;
 incomplete cached services remain an inferred cause, not a captured backend
 diagnosis. See [the power-cycle recovery check](docs/RECONNECT-TEST.md).
 
@@ -173,8 +173,9 @@ empty-memory setup are also checked during release preparation.
   not its firmware cause. The owner subsequently confirmed that rc11's fixed
   quarter-second backrest press was suitable. The owner found rc12's quarter-second
   seat pulse too short. No later approval of the changed backrest or seat durations
-  is recorded here. The new rc14 headrest and footrest timings await a chair check;
-  a fixed physical step is not established.
+  is separately recorded here. The owner confirmed rc14's headrest and footrest
+  adjustment was suitable. Version 1.1.0 retains that behavior; a fixed physical
+  step or compatibility with all hardware is not established.
 - The owner confirmed seamless reconnection with the power-cycle recovery fix.
   No manual integration reload was needed in the reported successful test.
 - Movement, lumbar, heat on/off and massage controls were exercised on the chair.
@@ -292,12 +293,12 @@ failure returns to the existing setup or reconnect retry mechanism.
 
 ## Recorded limits and release checks
 
-The [candidate guide](docs/HOME-TEST.md) focuses on observing isolated headrest
-and footrest presses at the new half-second duration. Their response needs
-physical confirmation; retaining the other durations does not add new evidence
-about them. The successful rc8 Home checks do not need repeating. A calibrated
-physical step and unrelated long Continuous timing behavior remain outside this
-check.
+The owner confirmed rc14's requested headrest and footrest adjustment, and 1.1.0
+retains its control behavior. The [Home and direction guide](docs/HOME-TEST.md)
+records the released timings and successful Home checks; promotion to stable does
+not require repeating those checks. These reports do not establish a calibrated
+physical step, every chair/firmware combination, or the longer Continuous timing
+combinations described above.
 Sliders still target whole reported positions. Fractional targets or readback
 have not been verified. Rescaling their displayed numbers would not add precision,
 and this build does not change their range or step.

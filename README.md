@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc14** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0** — stable release.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,54 +9,40 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc14
+## What's new in 1.1.0
 
-Headrest and footrest buttons now use **fixed 0.5-second pulses**, increased from
-0.3 seconds. Backrest remains at **0.3 seconds** and seat at **0.5 seconds**. An
-isolated press does not extend to wait for a reported position increment. The new
-headrest and footrest response still needs a chair check. Pulse duration does not
-define a fixed physical step, and entity identities are unchanged.
+- **Return to neutral** runs the chair's native Home operation from Configuration,
+  stops active Continuous renewal and preserves saved choices and memory slots.
+- Controls selected during Home wait for completion. Only the latest choice runs;
+  **Stop movement** interrupts Home immediately and discards the waiting action.
+- Actions that need the controller awake activate it automatically. The first wake
+  after Home waits 0.25 seconds and requires fresh feedback before its requested
+  action. The separate **Turn on** button is removed.
+- Direction buttons use fixed pulses: **0.5 seconds** for headrest, seat and
+  footrest; **0.3 seconds** for backrest. **Seat tilt up/down** are available under
+  Controls. Presses do not extend to wait for a position increment.
+- **Wired controller (estimated)** shows On, Off or Unknown from HA actions. It
+  does not measure controller power and can be wrong after physical controls are used.
+- **Recall saved memory** (`svago.recall_memory`) gives automations a recall-only
+  action. Ordinary Memory buttons retain their save/recall behavior.
+- Preset failures before dispatch preserve Continuous sessions. An uncertain final
+  slider release retains the requirement to stop before the next control.
 
-The owner confirmed rc8's queued Footrest raise, one-press Memory 3 recall,
-latest-choice replacement and Stop cancellation during Home. A fresh Footrest
-raise also worked after Stop without another Home. This behavior is retained.
-The [short adjustment check](docs/HOME-TEST.md) describes how to observe the new pulses.
-
-The separate pause after the first wake following Return to neutral remains
-**0.25 seconds**.
-It still requires a fresh report after the pause, so the wait may take about 0.3 seconds
-with normal feedback cadence. The default maximum is 3.25 seconds after the wake
-acknowledgment, and the requested action is sent once. The interval was observed
-in rc6 diagnostics. The earlier intermittent recall report's cause, including
-the role of the owner's toggle automation, remains unconfirmed.
-
-**Wired controller (estimated)** appears under Diagnostics and is enabled by
-default. It estimates On or Off from successful Home Assistant wake and Return
-to neutral actions, and starts Unknown. It does not measure controller power;
-physical controls or the Bluetooth remote can make the estimate wrong.
-
-The standalone **Turn on** button is removed; actions that need the controller
-awake activate it automatically. **Return to neutral** appears in **Configuration**
-alongside the memory controls. The owner confirmed that it worked in 1.1.0rc1;
-its native command and completion checks are unchanged.
-
-The button sends the native command once and waits for fresh feedback showing
-all four reported positions at zero with heat and massage Off. It stops active
-Continuous renewal and keeps the saved Continuous choices for the next explicit
-start. It does not use or overwrite a saved memory slot.
+Existing memories and timer preferences are retained when upgrading. Fresh
+installations start with empty memory slots. See the [release notes](docs/RELEASE_NOTES-1.1.0.md)
+for upgrade details and [validation record](VALIDATION.md) for tested behavior
+and remaining physical-validation limits.
 
 ## Install and connect
 
 Requires Home Assistant 2026.10.0 or newer.
 
-### Install from Marketplace or HACS
+### Install with Marketplace or HACS
 
-- **Home Assistant 2026.11 or newer:** Go to **Settings → Marketplace**, search for **Svago Motion Mastery**, and select **Install**. Restart if prompted.
-- **Home Assistant 2026.10:** Open **HACS**, search for **Svago Motion Mastery**, and select **Download**. Then restart Home Assistant.
-
-### If it doesn’t appear in search
-
-Add `roweboat123/svago-home-assistant` as a custom **Integration** repository in Marketplace or HACS, then install it as above.
+Open **Marketplace** on Home Assistant 2026.11 or newer, or **HACS** on 2026.10.
+If Svago Motion Mastery is not listed, add `roweboat123/svago-home-assistant` as a
+custom **Integration** repository. Select the released version, install it and
+restart Home Assistant. A GitHub release and catalog acceptance are separate steps.
 
 To install manually, download the ZIP from [Releases](https://github.com/roweboat123/svago-home-assistant/releases), copy the `custom_components/svago` folder into `/config/custom_components/`, and restart Home Assistant.
 
@@ -68,7 +54,10 @@ To install manually, download the ZIP from [Releases](https://github.com/roweboa
 
 ### Upgrading manually
 
-Replace the `custom_components/svago` folder and restart Home Assistant. Keep your existing Svago integration entry to preserve your entities and saved memories. On a fresh install, Memory 1, Memory 2, and Memory 3 start empty.
+Replace the `custom_components/svago` folder and restart Home Assistant. Keep the
+existing Svago integration entry and Home Assistant storage to preserve entities,
+saved memories and timer preferences. Do not delete and recreate the entry.
+On a fresh install, Memory 1, Memory 2 and Memory 3 start empty.
 
 ## Controls
 

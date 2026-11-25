@@ -22,5 +22,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/roweboat123/svago-home-assistant/issues",
   "requirements": [],
-  "version": "1.1.0rc14"
+  "version": "1.1.0"
 }

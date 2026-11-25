@@ -1,4 +1,4 @@
-# Direction-pulse check — 1.1.0rc14
+# Home and direction controls — 1.1.0
 
 Isolated direction presses now use these fixed command durations without extending
 them to wait for a reported position increment:
@@ -10,34 +10,35 @@ them to wait for a reported position increment:
 | Seat | 0.5 seconds |
 | Footrest | 0.5 seconds |
 
-Headrest and footrest increase from 0.3 to 0.5 seconds; their new response still
-needs chair confirmation. Backrest and seat timings are unchanged. These command
-durations do not define a fixed physical step. Entity identities, Home behavior
-and the separate 0.25-second wake interval are unchanged. Version 1.0.2 remains
-stable.
+The owner confirmed the headrest and footrest adjustment in rc14; stable 1.1.0
+uses the same control behavior. These command durations do not define a fixed
+physical step or establish compatibility with every chair or firmware. Existing
+entity identities, Home behavior and the separate 0.25-second wake interval are
+retained.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc14.zip` and replace
+1. Extract `svago-home-assistant-1.1.0.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
-   folder. Keep the existing integration entry and Home Assistant storage.
+   folder. Keep the existing integration entry and Home Assistant storage to
+   preserve memories and preferences; do not delete and recreate the entry.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready** and check that diagnostics report
-   `1.1.0rc14`.
+   `1.1.0`.
 
-## Observe headrest and footrest presses
+## Using direction buttons
 
-From a comfortable position away from the chosen direction's endpoint, press a
-headrest or footrest direction button once. Observe whether it moves and stops,
-and whether the adjustment is suitable. Let that press finish before choosing
-another direction or axis. The pulse specifies a command duration, not an angle or position
-increment. An observed endpoint remains a quiet no-op.
+A direction button sends a short adjustment and releases automatically. Let an
+isolated press finish before choosing another direction or axis. The pulse
+specifies a command duration, not an angle or position increment. An observed
+endpoint is a quiet no-op.
 
 Stop, reversal and replacement controls retain their interruption behavior.
 Repeated presses in the same direction join one burst with a three-second cap.
-The successful Home checks do not need repeating; long Continuous-timer checks
-are outside this candidate's scope.
+The confirmed direction and Home checks do not need repeating just for this
+stable upgrade. Longer Continuous timing combinations retain the limits recorded
+in [validation](../VALIDATION.md).
 
 ## Retained Home evidence and behavior
 

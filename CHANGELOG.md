@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0 — 2026-11-25
+
+Stable release of the confirmed 1.1.0rc14 behavior, with no control changes.
+Changes since 1.0.2:
+
+- Add native **Return to neutral** under Configuration. Preserve memory slots and
+  Continuous choices while stopping active renewal.
+- Finish Home before the latest waiting movement, memory, preset or comfort/settings
+  request. Stop interrupts immediately and discards waiting actions; failures and
+  connection loss never replay them later.
+- Automatically wake for actions that need it, remove the standalone Turn on
+  button, and require fresh feedback after a 0.25-second interval on the first
+  wake following Home.
+- Add the default-enabled **Wired controller (estimated)** diagnostic sensor,
+  with On/Off/Unknown estimates; it does not measure controller power.
+- Add `svago.recall_memory` for exactly one Memory button, without entering the
+  save path. Existing automations are not migrated automatically.
+- Preserve Continuous sessions when a preset fails before its write and retain
+  the stop requirement after uncertain final slider-release delivery.
+- Restore **Seat tilt up/down** with their original identities. Use fixed isolated
+  pulses of 0.5 seconds for headrest, seat and footrest, and 0.3 seconds for backrest,
+  retaining the three-second cap on joined presses.
+
+Upgrade by replacing the integration files and restarting, while keeping the
+existing integration entry and Home Assistant storage. Fresh memory slots remain
+empty. See [release notes](docs/RELEASE_NOTES-1.1.0.md) and [validation](VALIDATION.md).
+
 ## 1.1.0rc14 — 2026-11-24
 
 - Increase fixed headrest and footrest pulses from 0.3 to 0.5 seconds. Keep backrest
