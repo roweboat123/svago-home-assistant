@@ -120,13 +120,11 @@ async def test_directional_step_leaves_other_motors_untouched_then_releases(
     assert chair.writes[1][19] == 2
     boundary = OBSERVED_BOUNDS[index][1 if direction > 0 else 0]
     remaining = abs(boundary - before.positions[index])
-    allowed_increments = (1, 2) if index == 1 else ((5, 1, 3, 5)[index],)
+    allowed_increments = ((5, 1, 3, 5)[index],)
     increments = len(chair.writes) - 2
-    # The real-clock deadline can shorten the fake clock's first sleep slightly,
-    # permitting a final repeat just before the nominal 0.1 s boundary.
     assert increments in {min(count, remaining) for count in allowed_increments}
     if index == 1:
-        assert chair.time == pytest.approx(0.1)
+        assert chair.time == pytest.approx(0.05)
     assert chair.writes[-1][13:17] == b"\x80" * 4
     positions = list(before.positions)
     positions[index] += direction * increments
@@ -287,7 +285,7 @@ async def test_stale_mid_burst_does_not_write_old_heat(chair):
     "index,name,duration,write_times",
     [
         (0, "headrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
-        (1, "backrest", 0.1, [0]),
+        (1, "backrest", 0.05, [0]),
         (2, "seat", 0.25, [0, 0.1, 0.2]),
         (3, "footrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
     ],
@@ -501,7 +499,7 @@ async def test_half_second_press_stops_early_at_observed_bound(chair, index, dir
     assert chair.writes[-1][13:17] == b"\x80" * 4
 
 
-@pytest.mark.parametrize("index", [0, 3])
+@pytest.mark.parametrize("index", [0, 1, 3])
 async def test_movement_cancellation_attempts_stop(chair, index):
     chair.feedback = False
     chair.activation_feedback = True
@@ -518,10 +516,11 @@ async def test_movement_cancellation_attempts_stop(chair, index):
     assert trace["stop"]["outcome"] == "write_returned"
 
 
-async def test_movement_transport_failure_is_not_retried(chair):
+@pytest.mark.parametrize("index", [0, 1])
+async def test_movement_transport_failure_is_not_retried(chair, index):
     chair.fail_at = 2  # Activation succeeds before the first direction write fails.
     with pytest.raises(ControlError, match="not retried"):
-        await chair.controller.step_position(0, 1)
+        await chair.controller.step_position(index, 1)
     assert len(chair.writes) == 3
     assert chair.writes[-1][13:17] == b"\x80" * 4
     trace = chair.controller.tap_requests[-1]
@@ -545,7 +544,8 @@ async def test_normal_movement_release_failure_is_surfaced(chair, index):
     assert "not retried" in trace["stop"]["error"]
 
 
-async def test_movement_reconnect_never_releases_on_new_connection(chair):
+@pytest.mark.parametrize("index", [0, 1])
+async def test_movement_reconnect_never_releases_on_new_connection(chair, index):
     chair.feedback = False
     chair.activation_feedback = True
 
@@ -556,7 +556,7 @@ async def test_movement_reconnect_never_releases_on_new_connection(chair):
 
     chair.on_sleep = reconnect
     with pytest.raises(ControlError, match="Fresh"):
-        await chair.controller.step_position(0, 1)
+        await chair.controller.step_position(index, 1)
     assert len(chair.writes) == 2
     trace = chair.controller.tap_requests[-1]
     assert trace["outcome"] == "failed"

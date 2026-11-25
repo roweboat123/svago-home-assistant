@@ -10,8 +10,6 @@ from .const import DOMAIN
 RETIRED_BUTTON_KEYS = frozenset(
     {
         "turn_on",
-        "seat_vertical",
-        "seat_horizontal",
         "memory_set_1",
         "memory_set_2",
         "memory_set_3",

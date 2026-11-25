@@ -59,7 +59,7 @@ async def test_setup_adds_three_empty_memories_without_sending_or_saving():
     await async_setup_entry(None, SimpleNamespace(runtime_data=connection), add_entities)
     entities = add_entities.call_args.args[0]
     memories = [entity for entity in entities if isinstance(entity, MemoryButton)]
-    assert len(entities) == 15
+    assert len(entities) == 17
     assert len(memories) == 3
     assert all(isinstance(entity, ButtonEntity) for entity in memories)
     for slot in range(1, 4):
@@ -67,9 +67,11 @@ async def test_setup_adds_three_empty_memories_without_sending_or_saving():
         assert recall.name == f"Memory {slot}"
         assert recall.unique_id == f"{ADDRESS}_memory_{slot}"
         assert not recall.available
-    assert not any(
-        entity.unique_id.endswith(("_seat_vertical", "_seat_horizontal")) for entity in entities
-    )
+    assert {
+        entity.unique_id
+        for entity in entities
+        if entity.unique_id.endswith(("_seat_vertical", "_seat_horizontal"))
+    } == {f"{ADDRESS}_seat_vertical", f"{ADDRESS}_seat_horizontal"}
     assert connection.memories == {}
     connection.save_memory.assert_not_called()
     connection.recall_memory.assert_not_called()

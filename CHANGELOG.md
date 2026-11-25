@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0rc9 — 2026-11-24
+
+- Change backrest buttons to a requested 0.05-second tap, releasing without
+  waiting for the first position-progress report. This halves nominal duration
+  but does not guarantee half the physical movement.
+- Restore **Seat tilt up** and **Seat tilt down** with their
+  original entity keys. Keep the seat pulse at 0.25 seconds and other axes'
+  existing startup handling.
+- Record the owner's successful rc8 queued Footrest raise, one-press Memory 3
+  recall, latest-choice replacement and Stop cancellation checks during Home,
+  plus fresh Footrest raise after Stop. Retain Home handling, wake timing and
+  saved memories. The new backrest tap and restored seat controls await chair checks.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc8 — 2026-11-24
 
 - Let native Home complete before the latest requested movement, recall, preset

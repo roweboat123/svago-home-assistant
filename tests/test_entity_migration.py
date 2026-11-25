@@ -53,8 +53,6 @@ async def test_remove_only_retired_controls_for_this_entry_and_address(registry_
     obsolete = [
         add(key)
         for key in (
-            "seat_horizontal",
-            "seat_vertical",
             "memory_set_1",
             "memory_set_2",
             "memory_set_3",
@@ -63,10 +61,12 @@ async def test_remove_only_retired_controls_for_this_entry_and_address(registry_
     obsolete.extend(add(f"memory_set_{slot}", domain="switch") for slot in (1, 2, 3))
     # A renamed entity must still be removed by its integration-owned identity.
     renamed = registry.async_update_entity(
-        obsolete[0].entity_id, new_entity_id="button.my_old_seat_control"
+        obsolete[0].entity_id, new_entity_id="button.my_old_memory_set"
     )
     obsolete[0] = renamed
     preserved = [
+        add("seat_vertical"),
+        add("seat_horizontal"),
         add("seat_position", domain="number"),
         add("memory_1"),
         add("memory_2"),
@@ -80,6 +80,10 @@ async def test_remove_only_retired_controls_for_this_entry_and_address(registry_
         add("seat_horizontal", address="AA:BB:CC:DD:EE:FF"),
         add("seat_vertical", owner=other, address="11:22:33:44:55:66"),
     ]
+    # Restored seat controls retain their historical identities and user renames.
+    preserved[0] = registry.async_update_entity(
+        preserved[0].entity_id, new_entity_id="button.my_chair_seat_vertical", name="Seat tilt"
+    )
     # Transfer one exact matching retired identity to another config entry;
     # cleanup must respect its current owner even when address and key match.
     moved = registry.async_update_entity(obsolete[-1].entity_id, config_entry_id=other.entry_id)

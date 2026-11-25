@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc8** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc9** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,32 +9,28 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc8
+## What's new in 1.1.0rc9
 
-**Return to neutral** now completes before a requested movement, memory recall,
-preset or comfort setting runs. You can choose the next control while Home is
-travelling: only the latest choice waits, and a newer choice replaces it.
-**Stop movement** interrupts Home immediately and discards the waiting action.
-If Home fails or the connection is lost, the waiting action is discarded.
+Backrest buttons now request a **0.05-second tap**, half the previous nominal
+duration, and release without waiting for the first position-progress report.
+This backrest-only timing change does not guarantee half the physical movement
+or a fixed adjustment size.
 
-Backrest direction buttons now normally use a **0.1-second pulse**, reduced from
-0.25 seconds. If no forward movement has been reported when that pulse ends,
-the command can continue until the first forward report or the existing
-two-second startup deadline. The physical adjustment size is not fixed.
+**Seat tilt up** and **Seat tilt down** are restored under
+Controls. Seat's normal 0.25-second pulse and the other axes' startup handling
+are unchanged.
 
-The owner reports a footrest failure with both the raise button and HA position
-slider following interrupted Home. The wired controller could raise it, and HA
-Footrest raise worked after Home completed fully. These observations motivate
-the Home-completion change; the firmware cause and this candidate's physical
-effectiveness remain unverified.
+The owner confirmed rc8's queued Footrest raise, one-press Memory 3 recall,
+latest-choice replacement and Stop cancellation during Home. A fresh Footrest
+raise also worked after Stop without another Home. This behavior is retained;
+the shorter backrest tap and restored seat controls await their rc9 chair checks.
 
 The pause after the first wake following Return to neutral remains **0.25 seconds**.
 It still requires a fresh report after the pause, so the wait may take about 0.3 seconds
 with normal feedback cadence. The default maximum is 3.25 seconds after the wake
 acknowledgment, and the requested action is sent once. The interval was observed
-in rc6 diagnostics, but reliable first-press memory recall after Home still needs
-confirmation. The owner is revising the toggle automation; its role remains
-unconfirmed.
+in rc6 diagnostics. The earlier intermittent recall report's cause, including
+the role of the owner's toggle automation, remains unconfirmed.
 
 **Wired controller (estimated)** appears under Diagnostics and is enabled by
 default. It estimates On or Off from successful Home Assistant wake and Return
@@ -81,7 +77,7 @@ Replace the `custom_components/svago` folder and restart Home Assistant. Keep yo
 | Control | What it does |
 | --- | --- |
 | Headrest, backrest, seat and footrest position | Move toward a reported position |
-| Headrest, backrest and footrest direction buttons | Make a short adjustment |
+| Headrest, backrest, seat and footrest direction buttons | Make a short adjustment |
 | Lumbar inflate / deflate | Send a three-second adjustment, then release |
 | Stop movement | Interrupt movement and discard older waiting adjustments |
 | Heat | Turn master heat on or off |
@@ -99,13 +95,15 @@ Replace the `custom_components/svago` folder and restart Home Assistant. Keep yo
 Other controls appear under **Controls**. The diagnostic sensors appear under
 **Diagnostics**.
 
-Direction buttons stop automatically. Headrest and footrest normally use
-half-second presses; backrest uses 0.1 seconds. If that interval ends
-without forward feedback, the press continues only until forward movement is
-reported or two seconds from movement start. No progress by that deadline ends
-the press with an error. Repeating the same direction extends one burst, with a
-three-second total cap; it cannot extend the no-progress deadline. Stop, a
-reversal or another adjustment takes over after releasing the old command.
+Direction buttons stop automatically. Backrest requests a 0.05-second tap and
+releases without extending it to wait for position progress. Headrest and
+footrest normally use half-second presses; seat uses a quarter second. Those
+three axes can continue until forward movement is reported or two seconds from
+movement start if the normal pulse ends without progress. No progress by that
+deadline ends their press with an error. Repeating the same direction extends
+one burst, with a three-second total cap; it cannot extend those axes' no-progress
+deadline. Stop, a reversal or another adjustment takes over after releasing the
+old command.
 A press at an observed limit quietly does nothing. Each press's physical
 adjustment size depends on the chair's response and is not fixed.
 

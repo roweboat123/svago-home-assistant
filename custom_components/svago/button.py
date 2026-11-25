@@ -12,6 +12,8 @@ BUTTONS = (
     ("head_out", "Headrest outward", 0, -1),
     ("back_recline", "Backrest recline", 1, 1),
     ("back_upright", "Backrest upright", 1, -1),
+    ("seat_vertical", "Seat tilt up", 2, 1),
+    ("seat_horizontal", "Seat tilt down", 2, -1),
     ("foot_raise", "Footrest raise", 3, 1),
     ("foot_lower", "Footrest lower", 3, -1),
     ("lumbar_inflate", "Lumbar inflate", None, 1),
