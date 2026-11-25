@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc3
+# Validation — Svago 1.1.0rc4
 
 ## Scope
 
@@ -7,7 +7,7 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Local validation of 1.1.0rc3 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+Local validation of 1.1.0rc4 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
 **1,079 tests** on each, plus Ruff lint and formatting.
 Five dependency deprecation warnings remain on each version. Coverage includes
 bounded directional startup, fresh feedback after the post-Home wake interval,
@@ -25,8 +25,8 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc3 retains Return to neutral under Configuration and removes the
-standalone Turn on button. Home's entity identity, native command and completion
+Version 1.1.0rc4 retains Return to neutral under Configuration and the removal of
+the standalone Turn on button. Home's entity identity, native command and completion
 checks are unchanged. This remains a release candidate; 1.0.2 is the latest
 stable release.
 
@@ -34,7 +34,8 @@ The new directional-startup handling addresses diagnostics where a half-second
 footrest press showed no forward position feedback while a slider moved using
 the same direction commands. This supports a startup-timing hypothesis without
 establishing the cause. The candidate bounds startup waiting to two seconds and
-keeps the three-second absolute burst cap; its physical result is still pending.
+keeps the three-second absolute burst cap. The owner subsequently confirmed that
+1.1.0rc3 works; the physical cause remains unproven.
 
 The owner reports that the first memory press after Home only wakes the wired
 controller and the second performs recall, regardless of time spent waiting
@@ -43,14 +44,14 @@ by a successful nonneutral Memory 3 recall, so it does not capture that failure.
 In a separate controlled check, the owner went directly from Home to Memory 3
 and confirmed that the first press only woke the controller; the second moved it.
 The candidate tracks a Home write attempt, then waits for a fresh report after
-a two-second settling interval following the next foreground wake acknowledgment.
-Healthy feedback completes this wait in about two seconds; the existing
-three-second stale-feedback limit gives a five-second total bound on this wait.
+a one-second settling interval following the next foreground wake acknowledgment.
+Healthy feedback completes this wait in about one second; the existing
+three-second stale-feedback limit gives a four-second total bound on this wait.
 The wake command and dependent memory target each remain single sends. Normal
 actions without a preceding Home retain their timing; Home, reconnects and passive
-status never start a wake on their own. The explanation and physical success of
-this settling period are unconfirmed; the tap change does not establish a fix
-for the separate memory-recall report.
+status never start a wake on their own. The owner confirmed rc3 works with its
+two-second interval. Version 1.1.0rc4 shortens only this interval to one second;
+the shorter timing still needs an on-chair check.
 
 The owner previously reported completing internal testing of the fixes supplied
 for stable 1.0.2. This candidate retains those fixes.
@@ -86,8 +87,8 @@ empty-memory setup are also checked during release preparation.
 - Movement, lumbar, heat on/off and massage controls were exercised on the chair.
   Half-second headrest and footrest button bursts previously improved movement
   with shorter taps. Later diagnostics showed a half-second footrest press
-  without forward feedback while slider movement worked; the rc3 startup change
-  has not yet been physically confirmed.
+  without forward feedback while slider movement worked. The owner subsequently
+  confirmed that rc3 works; the shorter rc4 wake interval remains untested.
 - The idempotent activation command turns the wired controller on when needed;
   repeating it does not toggle it off.
 - Status notifications reflect changes made with the physical controls. A
@@ -189,10 +190,9 @@ failure returns to the existing setup or reconnect retry mechanism.
 
 ## Recorded limits and release checks
 
-The new startup timing needs an on-chair check of the affected direction buttons
-and first-press Memory 1–3 recall after Home. Neither is yet a confirmed fix for
-the reported behavior. The [candidate guide](docs/HOME-TEST.md) gives those focused
-checks; unrelated long Continuous timing tests are not part of this check.
+The shorter one-second wake interval needs an on-chair check of first-press
+recall after Home. The [candidate guide](docs/HOME-TEST.md) gives that focused
+check; unrelated long Continuous timing tests are not part of this check.
 
 The successful HA Home test does not separately establish each interruption or
 comfort-function case. The [Home guide](docs/HOME-TEST.md) retains optional checks

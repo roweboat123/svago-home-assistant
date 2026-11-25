@@ -59,14 +59,14 @@ async def test_home_then_memory_sends_one_on_then_one_target_after_settle(wake_c
     assert len(events) == 2
     assert events[0][1][5] == 0x11
     assert events[0][0] == started
-    assert events[1][0] - started >= 2 - 1e-9
+    assert 1 - 1e-9 <= events[1][0] - started <= 1.2
     assert events[1][1] == memory_packets(chair)[0]
     assert len(memory_packets(chair)) == 1
     assert chair.writes.count(CAPTURED_HOME) == 1
     assert chair.controller.memory_requests[-1]["outcome"] == "target_reached"
     settling = chair.controller.last_activation["post_home_settle"]
-    assert settling["required_seconds"] == 2
-    assert settling["duration_seconds"] >= 2
+    assert settling["required_seconds"] == 1
+    assert 1 <= settling["duration_seconds"] <= 1.2
     assert settling["status_reports"] >= 1
     assert settling["outcome"] == "settled"
     assert chair.controller.last_activation["outcome"] == "acknowledged"
@@ -90,7 +90,7 @@ async def test_home_then_movement_settles_once_before_direction_write(wake_chair
     activation = [event for event in events if event[1][5] == 0x11]
     direction = [event for event in events if event[1][13] == 0x82]
     assert len(activation) == 1
-    assert direction and direction[0][0] - started >= 2 - 1e-9
+    assert direction and direction[0][0] - started >= 1 - 1e-9
     assert events[-1][1][13:17] == b"\x80" * 4
     assert chair.controller.tap_requests[-1]["outcome"] == "pulse_completed"
 
@@ -122,7 +122,7 @@ async def test_uncertain_home_delivery_still_requires_wake_settle(wake_chair, re
 
     await chair.controller.turn_on()
 
-    assert chair.time - started >= 2 - 1e-9
+    assert chair.time - started >= 1 - 1e-9
     assert chair.controller.last_activation["post_home_settle"]["outcome"] == "settled"
     following = chair.writes[count:]
     assert len([packet for packet in following if packet[5] == 0x11]) == 1
@@ -169,7 +169,7 @@ async def test_failed_wake_sends_no_memory_target_and_retains_pending_settle(wak
     chair.on_sleep = lambda: refresh(chair)
     started = chair.time
     await chair.controller.turn_on()
-    assert chair.time - started >= 2 - 1e-9
+    assert chair.time - started >= 1 - 1e-9
     assert chair.controller.last_activation["post_home_settle"]["outcome"] == "settled"
 
 
@@ -213,7 +213,7 @@ async def test_interrupted_post_home_wake_cannot_send_old_memory_target(wake_cha
         chair.on_sleep = lambda: refresh(chair)
         started = chair.time
         await chair.controller.turn_on()
-        assert chair.time - started >= 2 - 1e-9
+        assert chair.time - started >= 1 - 1e-9
         assert chair.controller.last_activation["post_home_settle"]["outcome"] == "settled"
         assert not memory_packets(chair)
     finally:
@@ -244,7 +244,7 @@ async def test_new_home_during_pending_wake_requires_its_own_later_settle(wake_c
         chair.on_sleep = lambda: refresh(chair)
         started = chair.time
         await chair.controller.turn_on()
-        assert chair.time - started >= 2 - 1e-9
+        assert chair.time - started >= 1 - 1e-9
         assert chair.controller.last_activation["post_home_settle"]["outcome"] == "settled"
         assert not memory_packets(chair)
     finally:
@@ -270,7 +270,7 @@ async def test_early_status_during_settle_cannot_replace_a_report_after_full_wai
         await chair.controller.recall_memory(2, memory_profile())
 
     assert reported
-    assert 2 < chair.time - started <= 5
+    assert 1 < chair.time - started <= 4
     assert len(chair.writes) == 1 and chair.writes[0][5] == 0x11
     assert not memory_packets(chair)
     settling = chair.controller.last_activation["post_home_settle"]
@@ -278,18 +278,18 @@ async def test_early_status_during_settle_cannot_replace_a_report_after_full_wai
     assert settling["status_reports"] == 1
 
 
-async def test_final_status_after_two_seconds_releases_one_memory_target(wake_chair):
+async def test_final_status_after_one_second_releases_one_memory_target(wake_chair):
     chair = wake_chair
     await complete_home(chair)
     started = chair.time
     events = record_writes(chair)
-    chair.on_sleep = lambda: refresh(chair) if chair.time - started >= 2.3 else None
+    chair.on_sleep = lambda: refresh(chair) if chair.time - started >= 1.3 else None
 
     await chair.controller.recall_memory(2, memory_profile())
 
     assert len(events) == 2
     assert events[0][1][5] == 0x11
-    assert 2.3 <= events[1][0] - started <= 2.5
+    assert 1.3 <= events[1][0] - started <= 1.5
     assert len(memory_packets(chair)) == 1
     assert chair.controller.last_activation["post_home_settle"]["outcome"] == "settled"
 

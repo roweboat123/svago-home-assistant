@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0rc4 — 2026-11-24
+
+- Record the owner's confirmation that 1.1.0rc3 works.
+- Shorten the settling interval after the first wake following Home from two
+  seconds to one, with fresh feedback still required and a four-second maximum
+  including notification cadence. The shorter interval needs an on-chair check.
+- Keep the two-second Home neutral-stability and directional startup limits.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc3 — 2026-11-24
 
 - Add bounded startup waiting to directional presses when no forward movement

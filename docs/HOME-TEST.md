@@ -1,48 +1,48 @@
-# Home and startup candidate checks — 1.1.0rc3
+# Home and startup candidate checks — 1.1.0rc4
 
 The chair's exact native Home command was captured from Bluetooth remote
 power-off and successfully replayed from a phone without disconnecting. The owner
 then confirmed that **Return to neutral** worked in Home Assistant with 1.1.0rc1.
-Version 1.1.0rc3 places that button under **Configuration**, with the same entity
-identity and behavior. Version 1.0.2 remains the stable release.
+Version 1.1.0rc4 retains that button under **Configuration**, with the same entity
+identity and behavior. The owner confirmed that rc3 works; rc4 shortens the
+post-wake settling interval to one second. Version 1.0.2 remains the stable release.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc3.zip` and replace
+1. Extract `svago-home-assistant-1.1.0rc4.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready**. Check that diagnostics report
-   `1.1.0rc3` and that **Return to neutral** appears under **Configuration**.
+   `1.1.0rc4` and that **Return to neutral** appears under **Configuration**.
 
 The standalone Turn on button is removed. Movement buttons and sliders, lumbar,
 preset, memory-recall, Heat On and non-Off massage actions activate the controller
-automatically. The rc3 startup changes need an on-chair check; Home's native
+automatically. The shorter wake interval needs an on-chair check; Home's native
 command and completion checks are unchanged.
 
-## Check the rc3 startup changes
+## Check the shorter rc4 wake interval
 
 1. Use **Return to neutral** and let it finish.
 2. Press **Memory 3** once, using its existing saved position away from neutral.
    Observe whether that first press wakes the controller and moves the chair to
-   the saved position. This candidate waits for fresh feedback after a two-second
-   settling interval, with a five-second maximum after the wake acknowledgment;
+   the saved position. This candidate waits for fresh feedback after a one-second
+   settling interval, with a four-second maximum after the wake acknowledgment;
    it sends the saved target once.
 3. Optionally repeat Home followed by one press of another memory that already
    contains a position away from neutral. Memory 1's saved neutral pose does not
    test travel away from Home. Leave the saved slots unchanged.
-4. From a position with room to move, press an affected direction button once.
+4. Optionally, from a position with room to move, press a direction button once.
    Check that it makes a short adjustment and stops. If no forward position
-   report arrives during the normal pulse, rc3 allows startup waiting for up to
+   report arrives during the normal pulse, directional startup waiting allows up to
    two seconds; repeating presses cannot extend that no-progress deadline.
 
-The owner confirmed in a direct Home-to-Memory-3 check that the first press only
-wakes the wired controller and the second recalls the position. Waiting after
-Home did not prevent the reported behavior. The candidate's settling period
-starts after that first press's wake acknowledgment.
-These changes also address the diagnosed footrest tap pattern. The physical
-cause and effectiveness of these changes are still unconfirmed. If a first
+Before rc3, the owner confirmed in a direct Home-to-Memory-3 check that the first
+press only woke the wired controller and the second recalled the position.
+Waiting after Home did not prevent that behavior. The owner then confirmed rc3
+works. The settling period starts after the first press's wake acknowledgment;
+rc4's shorter one-second interval still needs physical confirmation. If a first
 press fails or movement differs from the expected result, download diagnostics
 immediately and describe what moved and whether the controller woke. No long
 Continuous-timer run is needed here.
