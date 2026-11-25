@@ -102,3 +102,37 @@ async def test_fresh_entry_has_nothing_to_remove(registry_hass):
     async_remove_retired_entities(hass, selected)
     assert not registry.entities
     assert not registry.deleted_entities
+
+
+@pytest.mark.parametrize("owned", [True, False], ids=["this_entry", "other_entry"])
+async def test_retired_turn_on_matches_only_owned_button_identity(registry_hass, owned):
+    hass, registry, entries = registry_hass
+    selected = entry(entries, "selected")
+    other = entry(entries, "other")
+
+    def add(key, *, owner=selected, domain="button", platform="svago", address=ADDRESS):
+        return registry.async_get_or_create(
+            domain, platform, f"{address}_{key}", config_entry=owner
+        )
+
+    obsolete = add("turn_on", owner=selected if owned else other)
+    obsolete = registry.async_update_entity(
+        obsolete.entity_id, new_entity_id="button.my_chair_wake"
+    )
+    preserved = [
+        add("turn_on", domain="switch"),
+        add("turn_on", platform="another_integration"),
+        add("turn_on", address="AA:BB:CC:DD:EE:FF"),
+        add("turn_on_extra"),
+        add("return_home"),
+        add("memory_1"),
+        add("memory_2"),
+        add("memory_3"),
+        add("set_memory", domain="switch"),
+    ]
+
+    async_remove_retired_entities(hass, selected)
+
+    assert registry.async_get(obsolete.entity_id) == (None if owned else obsolete)
+    assert all(registry.async_get(item.entity_id) == item for item in preserved)
+    assert entries == {"selected": selected, "other": other}

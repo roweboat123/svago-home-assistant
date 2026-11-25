@@ -46,6 +46,10 @@ MEMORY_POLL_SECONDS = 0.1
 HOME_MAX_SECONDS = 60.0
 HOME_STABLE_SECONDS = 2.0
 HOME_POLL_SECONDS = 0.1
+# A foreground wake after native Home needs time for the controller to settle.
+# This bounded interval is a test candidate, not a decoded readiness flag.
+POST_HOME_WAKE_SECONDS = 2.0
+POST_HOME_WAKE_POLL_SECONDS = 0.1
 MASSAGE_RENEW_SECONDS = 2400.0
 MASSAGE_DEFER_SECONDS = 1.0
 HEAT_RENEW_SECONDS = 10500.0
@@ -115,6 +119,8 @@ class Controller:
         self.last_activation: dict | None = None
         self.last_home_request: dict | None = None
         self._home_session: dict | None = None
+        self._home_wake_pending = False
+        self._home_wake_epoch = 0
         self.setting_requests: deque[dict] = deque(maxlen=5)
         self.position_requests: deque[dict] = deque(maxlen=4)
         self.tap_requests: deque[dict] = deque(maxlen=4)
@@ -332,6 +338,7 @@ class Controller:
         self._received_at = now
         self._updated.set()
         self._observe_home_status(status, now)
+        self._observe_tap_feedback(status, now)
         if self._massage_running or self._massage_starting:
             if (
                 status.timer_minutes("massage") != CONTINUOUS_MASSAGE_MINUTES
@@ -478,6 +485,7 @@ class Controller:
         trace = {"reason": reason, "outcome": "pending"}
         self.last_activation = trace
         try:
+            wake_epoch = self._home_wake_epoch if self._home_wake_pending else None
             status = self._current(generation)
             trace["status_before_hex"] = status.raw.hex().upper()
             try:
@@ -497,6 +505,9 @@ class Controller:
                     "The chair did not acknowledge activation; the requested control was not sent."
                 ),
             )
+            if wake_epoch is not None:
+                trace["outcome"] = "waiting_after_home"
+                await self._settle_after_home(generation, wake_epoch, trace)
             trace["outcome"] = "acknowledged"
         except asyncio.CancelledError:
             trace["outcome"] = "cancelled"
@@ -507,6 +518,57 @@ class Controller:
             raise
         finally:
             trace["status_after_hex"] = self.status.raw.hex().upper() if self.status else None
+
+    async def _settle_after_home(self, generation: int, wake_epoch: int, trace: dict) -> None:
+        """Wait once after an explicit wake; never send or replay a chair command."""
+        started = self._clock()
+        wall_started = asyncio.get_running_loop().time()
+        sequence = self._status_sequence
+        settling = {
+            "outcome": "waiting",
+            "required_seconds": POST_HOME_WAKE_SECONDS,
+            "status_reports": 0,
+        }
+        trace["post_home_settle"] = settling
+        try:
+            try:
+                maximum_wait = POST_HOME_WAKE_SECONDS + self._stale_after
+                async with asyncio.timeout(maximum_wait):
+                    while True:
+                        self._current(generation)
+                        if (
+                            self._status_sequence > sequence
+                            and self._received_at >= started + POST_HOME_WAKE_SECONDS
+                        ):
+                            break
+                        remaining = min(
+                            maximum_wait - (self._clock() - started),
+                            maximum_wait - (asyncio.get_running_loop().time() - wall_started),
+                        )
+                        if remaining <= 0:
+                            raise TimeoutError
+                        await self._sleep(min(POST_HOME_WAKE_POLL_SECONDS, remaining))
+            except TimeoutError:
+                raise ControlError(
+                    "The chair did not send fresh status after waking from Home; "
+                    "the requested control was not sent."
+                ) from None
+            self._current(generation)
+            if wake_epoch != self._home_wake_epoch:
+                raise CommandSuperseded
+            self._home_wake_pending = False
+            settling["outcome"] = "settled"
+        except asyncio.CancelledError:
+            settling["outcome"] = "cancelled"
+            raise
+        except Exception:
+            settling["outcome"] = "failed"
+            raise
+        finally:
+            settling["duration_seconds"] = round(self._clock() - started, 3)
+            settling["status_reports"] = (
+                self._status_sequence - sequence if generation == self._generation else None
+            )
 
     async def turn_on(self) -> None:
         async with self._serialized_operation() as generation:
@@ -601,6 +663,8 @@ class Controller:
                 }
                 self._home_session = session
                 # Delivery may succeed even if the transport later raises.
+                self._home_wake_epoch += 1
+                self._home_wake_pending = True
                 self._needs_stop = True
                 try:
                     async with asyncio.timeout(HOME_MAX_SECONDS):
@@ -1547,6 +1611,7 @@ class Controller:
         if (
             session is None
             or not session["accepting"]
+            or session.get("feedback_error") is not None
             or session["index"] != index
             or session["direction"] != direction
             or session["generation"] != self._generation
@@ -1558,11 +1623,63 @@ class Controller:
         ):
             return None
         if session["phase"] == "moving" and (
-            self._clock() >= session["deadline"]
-            or asyncio.get_running_loop().time() >= session["wall_deadline"]
+            self._clock() >= self._tap_deadline(session)
+            or asyncio.get_running_loop().time() >= self._tap_deadline(session, wall=True)
         ):
             return None
         return session
+
+    @staticmethod
+    def _tap_deadline(session: dict, *, wall: bool = False) -> float:
+        """A joined press cannot extend the no-progress startup limit."""
+        prefix = "wall_" if wall else ""
+        key = "deadline" if session["progress_observed"] else "startup_deadline"
+        return session[f"{prefix}{key}"]
+
+    def _observe_tap_feedback(self, status: Status, received_at: float) -> None:
+        """Keep the normal pulse deadline when feedback arrives during a write."""
+        session = self._tap_session
+        if (
+            session is None
+            or session["phase"] != "moving"
+            or not session["accepting"]
+            or session["generation"] != self._generation
+        ):
+            return
+        trace = session["trace"]
+        elapsed = received_at - session["started"]
+        try:
+            session["best_position"] = _check_movement_feedback(
+                status.positions[session["index"]],
+                session["start_position"],
+                session["best_position"],
+                session["direction"],
+                OBSERVED_BOUNDS[session["index"]],
+                elapsed,
+            )
+        except ControlError as exc:
+            session["feedback_error"] = str(exc)
+            trace["startup_outcome"] = "invalid_feedback"
+        else:
+            if (
+                session["best_position"] != session["start_position"]
+                and not session["progress_observed"]
+            ):
+                session["progress_observed"] = True
+                trace["first_progress_seconds"] = round(elapsed, 3)
+                trace["startup_outcome"] = "progress_observed"
+                if (
+                    received_at >= session["deadline"]
+                    or asyncio.get_running_loop().time() >= session["wall_deadline"]
+                ):
+                    trace["startup_extended"] = True
+        timeout = session.get("timeout")
+        if timeout is not None and not timeout.expired():
+            timeout.reschedule(
+                asyncio.get_running_loop().time()
+                if session["feedback_error"]
+                else self._tap_deadline(session, wall=True)
+            )
 
     async def _join_tap(self, session: dict, trace: dict, pulse_seconds: float) -> str | None:
         status = self._current(session["generation"])
@@ -1579,7 +1696,7 @@ class Controller:
                 session["wall_hard_deadline"],
                 max(session["wall_deadline"], asyncio.get_running_loop().time() + pulse_seconds),
             )
-            session["timeout"].reschedule(session["wall_deadline"])
+            session["timeout"].reschedule(self._tap_deadline(session, wall=True))
             session["trace"]["effective_pulse_seconds"] = round(
                 session["deadline"] - session["started"], 3
             )
@@ -1595,6 +1712,9 @@ class Controller:
             "direction_writes": owner_trace["direction_writes"],
             "coalesced_presses": owner_trace["coalesced_presses"],
             "effective_pulse_seconds": owner_trace.get("effective_pulse_seconds"),
+            "startup_extended": owner_trace.get("startup_extended"),
+            "startup_outcome": owner_trace.get("startup_outcome"),
+            "first_progress_seconds": owner_trace.get("first_progress_seconds"),
             "stop_outcome": owner_trace["stop"]["outcome"],
         }
         if error is not None:
@@ -1625,8 +1745,10 @@ class Controller:
     async def _tap_stop(self, generation, trace, requested_at, *, best_effort=False):
         try:
             await self._trace_tap_write(generation, (0x80,) * 4, trace["stop"], requested_at)
-        except Exception:
-            if not best_effort:
+        except BaseException as exc:
+            if generation == self._generation:
+                self._needs_stop = True
+            if not best_effort or not isinstance(exc, Exception):
                 raise
             _LOGGER.warning("Could not send the release with fresh state; no command was replayed")
 
@@ -1678,42 +1800,80 @@ class Controller:
                     result = "at_observed_limit"
                     return result
 
-                start = best = positions[index]
+                start = positions[index]
                 boundary = upper if direction > 0 else lower
                 motors = [0x8F] * 4
                 motors[index] = 0x82 if direction > 0 else 0x81
                 started = self._clock()
                 wall_started = asyncio.get_running_loop().time()
+                nominal_seconds = min(pulse_seconds, MOTOR_BURST_MAX_SECONDS)
                 session.update(
                     phase="moving",
                     started=started,
-                    deadline=started + pulse_seconds,
+                    deadline=started + nominal_seconds,
                     hard_deadline=started + MOTOR_BURST_MAX_SECONDS,
-                    wall_deadline=wall_started + pulse_seconds,
+                    startup_deadline=started
+                    + min(STARTUP_FEEDBACK_SECONDS, MOTOR_BURST_MAX_SECONDS),
+                    wall_deadline=wall_started + nominal_seconds,
                     wall_hard_deadline=wall_started + MOTOR_BURST_MAX_SECONDS,
+                    wall_startup_deadline=wall_started
+                    + min(STARTUP_FEEDBACK_SECONDS, MOTOR_BURST_MAX_SECONDS),
+                    progress_observed=False,
+                    start_position=start,
+                    best_position=start,
+                    feedback_error=None,
                 )
-                trace["effective_pulse_seconds"] = pulse_seconds
+                trace["effective_pulse_seconds"] = nominal_seconds
                 trace["maximum_burst_seconds"] = MOTOR_BURST_MAX_SECONDS
+                trace["startup_allowance_seconds"] = min(
+                    STARTUP_FEEDBACK_SECONDS, MOTOR_BURST_MAX_SECONDS
+                )
+                trace["startup_extended"] = False
+                trace["startup_outcome"] = "pending"
+                trace["first_progress_seconds"] = None
+
+                def checked_feedback():
+                    status = self._current(generation)
+                    self._observe_tap_feedback(status, self._clock())
+                    if session["feedback_error"]:
+                        raise ControlError(session["feedback_error"])
+                    return status.positions[index]
+
+                def pulse_finished():
+                    now = self._clock()
+                    wall_now = asyncio.get_running_loop().time()
+                    nominal_finished = (
+                        now >= session["deadline"] or wall_now >= session["wall_deadline"]
+                    )
+                    if session["progress_observed"]:
+                        return nominal_finished
+                    if nominal_finished:
+                        trace["startup_extended"] = True
+                    if (
+                        now >= session["startup_deadline"]
+                        or wall_now >= session["wall_startup_deadline"]
+                    ):
+                        trace["startup_outcome"] = "no_progress"
+                        raise ControlError(
+                            "The chair did not report movement in the requested direction "
+                            "within the startup limit; a stop was attempted."
+                        )
+                    return False
+
                 try:
                     write_pending = False
                     try:
-                        async with asyncio.timeout_at(session["wall_deadline"]) as timeout:
+                        async with asyncio.timeout_at(
+                            self._tap_deadline(session, wall=True)
+                        ) as timeout:
                             session["timeout"] = timeout
                             # Both clocks and a write-count cap bound a gesture,
                             # even if repeated calls arrive or the transport hangs.
                             for _ in range(ceil(MOTOR_BURST_MAX_SECONDS / MOTOR_REPEAT_SECONDS)):
-                                status = self._current(generation)
-                                position = status.positions[index]
-                                best = _check_movement_feedback(
-                                    position,
-                                    start,
-                                    best,
-                                    direction,
-                                    (lower, upper),
-                                    self._clock() - started,
-                                )
-                                if position == boundary or self._clock() >= session["deadline"]:
+                                position = checked_feedback()
+                                if position == boundary or pulse_finished():
                                     break
+                                timeout.reschedule(self._tap_deadline(session, wall=True))
                                 write_pending = True
                                 record = {}
                                 trace["direction_write_log"].append(record)
@@ -1725,19 +1885,48 @@ class Controller:
                                 finally:
                                     trace["direction_writes"] += int(record["write_attempted"])
                                 write_pending = False
-                                if self._current(generation).positions[index] == boundary:
+                                position = checked_feedback()
+                                if position == boundary or pulse_finished():
                                     break
+                                timeout.reschedule(self._tap_deadline(session, wall=True))
                                 await self._sleep(
                                     min(
                                         MOTOR_REPEAT_SECONDS,
-                                        max(0, session["deadline"] - self._clock()),
+                                        max(0, self._tap_deadline(session) - self._clock()),
+                                        max(
+                                            0,
+                                            self._tap_deadline(session, wall=True)
+                                            - asyncio.get_running_loop().time(),
+                                        ),
                                     )
                                 )
+                            else:
+                                checked_feedback()
+                                if not session["progress_observed"]:
+                                    trace["startup_outcome"] = "no_progress"
+                                    raise ControlError(
+                                        "The chair did not report movement in the requested direction "
+                                        "within the startup limit; a stop was attempted."
+                                    )
                     except TimeoutError:
+                        if session["feedback_error"]:
+                            raise ControlError(session["feedback_error"]) from None
                         if write_pending:
                             trace["direction_write_log"][-1]["outcome"] = "timed_out"
+                            if not session["progress_observed"]:
+                                trace["startup_outcome"] = "write_timed_out"
                             raise ControlError(
                                 "Movement write timed out; a stop was attempted."
+                            ) from None
+                        # A fresh reply may have arrived just before the timer
+                        # expired while sleep was pending. Inspect it once;
+                        # never resend a direction after the deadline.
+                        checked_feedback()
+                        if not session["progress_observed"]:
+                            trace["startup_outcome"] = "no_progress"
+                            raise ControlError(
+                                "The chair did not report movement in the requested direction "
+                                "within the startup limit; a stop was attempted."
                             ) from None
                 except BaseException:
                     session["accepting"] = False
@@ -1752,6 +1941,10 @@ class Controller:
         finally:
             if session is not None:
                 session["accepting"] = False
+                if "started" in session:
+                    trace["movement_duration_seconds"] = round(
+                        self._clock() - session["started"], 3
+                    )
                 if self._tap_session is session:
                     self._tap_session = None
                 # Store an ordinary result tuple so an unjoined gesture cannot

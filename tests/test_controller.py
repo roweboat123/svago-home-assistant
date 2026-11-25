@@ -287,13 +287,24 @@ async def test_stale_mid_burst_does_not_write_old_heat(chair):
     ],
 )
 @pytest.mark.parametrize("direction", [-1, 1])
-async def test_axis_pulse_without_position_change_releases_without_feedback_wait(
+async def test_axis_pulse_with_early_progress_keeps_nominal_duration_and_releases(
     chair, index, name, duration, write_times, direction
 ):
     chair.feedback = False
     chair.activation_feedback = True
     chair.controller.accept_status(status_with(positions=(5, 6, 16, 10)))
     before = chair.controller.status
+    reported = False
+
+    def first_progress():
+        nonlocal reported
+        if not reported:
+            positions = list(before.positions)
+            positions[index] += direction
+            chair.controller.accept_status(status_with(positions=positions))
+            reported = True
+
+    chair.on_sleep = first_progress
     await chair.controller.step_position(index, direction)
     assert len(chair.writes) == len(write_times) + 2
     assert chair.time == pytest.approx(duration)
@@ -301,14 +312,17 @@ async def test_axis_pulse_without_position_change_releases_without_feedback_wait
     motors[index] = 0x82 if direction == 1 else 0x81
     assert all(p[13:17] == bytes(motors) for p in chair.writes[1:-1])
     assert chair.writes[-1][13:17] == b"\x80" * 4
-    assert chair.controller.status.positions == before.positions
+    expected_positions = list(before.positions)
+    expected_positions[index] += direction
+    assert chair.controller.status.positions == tuple(expected_positions)
     assert chair.controller.status.heat == before.heat
     assert not chair.controller.busy
     trace = chair.controller.tap_requests[-1]
     assert trace["control"] == name and trace["direction"] == direction
     assert trace["outcome"] == "pulse_completed"
-    assert trace["feedback_changed"] is False
-    assert trace["status_reports"] == 1  # Activation acknowledgment only.
+    assert trace["feedback_changed"] is True
+    assert trace["status_reports"] == 2  # Activation and one useful position report.
+    assert trace["startup_extended"] is False
     assert trace["direction_writes"] == len(write_times)
     assert trace["duration_seconds"] == duration
     writes = trace["direction_write_log"]
@@ -323,8 +337,6 @@ async def test_axis_pulse_without_position_change_releases_without_feedback_wait
 
 
 async def test_tap_traces_keep_only_four_requests(chair):
-    chair.feedback = False
-    chair.activation_feedback = True
     for direction in (1, -1, 1, -1, 1):
         await chair.controller.step_position(0, direction)
     assert len(chair.controller.tap_requests) == 4

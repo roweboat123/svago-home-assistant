@@ -7,7 +7,6 @@ from .entity import SvagoEntity
 
 PARALLEL_UPDATES = 0  # The controller coordinates replacements; Stop stays callable.
 BUTTONS = (
-    ("turn_on", "Turn on", None, None),
     ("head_in", "Headrest inward", 0, 1),
     ("head_out", "Headrest outward", 0, -1),
     ("back_recline", "Backrest recline", 1, 1),
@@ -36,21 +35,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class SvagoButton(SvagoEntity, ButtonEntity):
     def __init__(self, connection, key, name, index, direction):
         super().__init__(connection, key, name)
-        self._attr_entity_category = EntityCategory.CONFIG if key == "turn_on" else None
         self._index = index
         self._direction = direction
-        self._attr_icon = (
-            "mdi:power"
-            if direction is None
-            else "mdi:stop-circle-outline"
-            if direction == 0
-            else "mdi:seat"
-        )
+        self._attr_icon = "mdi:stop-circle-outline" if direction == 0 else "mdi:seat"
 
     async def async_press(self) -> None:
-        if self._direction is None:
-            action = self.controller.turn_on()
-        elif self._index is not None:
+        if self._index is not None:
             action = self.controller.step_position(self._index, self._direction)
         elif self._direction:
             action = self.controller.adjust_lumbar(self._direction == 1)

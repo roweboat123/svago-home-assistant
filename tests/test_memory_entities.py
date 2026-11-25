@@ -59,7 +59,7 @@ async def test_setup_adds_three_empty_memories_without_sending_or_saving():
     await async_setup_entry(None, SimpleNamespace(runtime_data=connection), add_entities)
     entities = add_entities.call_args.args[0]
     memories = [entity for entity in entities if isinstance(entity, MemoryButton)]
-    assert len(entities) == 16
+    assert len(entities) == 15
     assert len(memories) == 3
     assert all(isinstance(entity, ButtonEntity) for entity in memories)
     for slot in range(1, 4):

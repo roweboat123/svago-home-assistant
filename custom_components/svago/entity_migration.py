@@ -1,4 +1,4 @@
-"""Remove only the controls retired by the memory control updates."""
+"""Remove only integration-owned controls retired by interface updates."""
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS
@@ -9,6 +9,7 @@ from .const import DOMAIN
 
 RETIRED_BUTTON_KEYS = frozenset(
     {
+        "turn_on",
         "seat_vertical",
         "seat_horizontal",
         "memory_set_1",

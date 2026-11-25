@@ -1,6 +1,31 @@
 # Changelog
 
+## 1.1.0rc3 — 2026-11-24
+
+- Add bounded startup waiting to directional presses when no forward movement
+  has been reported. After the normal interval, stop on the first forward report
+  or fail after the two-second startup bound. Retain the three-second absolute
+  burst cap. The diagnostic pattern suggests startup timing, but the
+  cause is not proven and this candidate still needs an on-chair check.
+- After a Home command, wait for fresh feedback following a two-second settling
+  interval after the first subsequent wake acknowledgment, before its requested
+  action. The wait is bounded to five seconds including notification cadence.
+  Keep a single wake command and single memory target; do not retry either.
+  This addresses the reported first-press memory behavior as a candidate,
+  with the physical cause and result still unconfirmed.
+- Remove the standalone **Turn on** button. Movement, sliders, lumbar, presets,
+  memory recall, Heat On and non-Off massage already activate the controller.
+  Memory saves, settings, Off and Stop do not wake it.
+- Retain **Return to neutral** under Configuration and the owner's successful
+  1.1.0rc1 Home test.
+- Replace the old startup script with a readiness-only wait. It sends no chair
+  command; callers check Ready before their chosen next action.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc2 — 2026-11-24
+
+Prepared but not delivered; superseded by rc3.
 
 - Move **Return to neutral** from Controls to Configuration, retaining its entity
   identity, native command and behavior.

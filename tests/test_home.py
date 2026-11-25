@@ -303,6 +303,7 @@ async def test_failed_home_transport_is_not_replayed_and_attempts_stop(home_chai
     count = len(chair.writes)
     chair.fail_at = None
     chair.report()
+    chair.on_sleep = chair.report
     await chair.controller.turn_on()
     following = chair.writes[count:]
     assert len(following) == 2
@@ -351,6 +352,7 @@ async def test_new_action_stops_pending_home_before_replacing_it(home_chair, rep
     try:
         await asyncio.wait_for(waiting.wait(), 1)
         chair.controller._sleep = chair.sleep
+        chair.on_sleep = lambda: chair.controller.accept_status(chair.controller.status)
         if replacement == "stop":
             await chair.controller.stop_movement()
         else:
@@ -408,7 +410,8 @@ async def test_reconnection_does_not_replay_home_or_stop_on_new_link(home_chair,
         await chair.controller.return_home()
 
     assert chair.writes == [CAPTURED_HOME]
-    chair.on_write = chair.on_sleep = None
+    chair.on_write = None
+    chair.on_sleep = chair.report
     await chair.controller.turn_on()
     assert len(chair.writes) == 2
     assert chair.writes[-1][5] == 0x11

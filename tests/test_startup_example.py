@@ -1,4 +1,4 @@
-"""Run the public startup example through Home Assistant's real script engine."""
+"""Run the readiness example and a guarded caller through HA's real script engine."""
 
 import asyncio
 from copy import deepcopy
@@ -10,10 +10,10 @@ from homeassistant.components.script.config import SCRIPT_ENTITY_SCHEMA
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers.script import Script, async_validate_actions_config
 
-EXAMPLE = Path(__file__).parents[1] / "examples" / "start_when_ready.yaml"
+EXAMPLE = Path(__file__).parents[1] / "examples" / "wait_until_ready.yaml"
 READY = "sensor.example_connection_status"
-BUTTON = "button.example_turn_on"
-INPUTS = {"ready_sensor": READY, "turn_on_button": BUTTON}
+BUTTON = "button.example_action"
+INPUTS = {"ready_sensor": READY}
 
 
 @pytest.fixture
@@ -36,39 +36,32 @@ async def make_script(hass, *, short_timeout=False):
         raw["sequence"][1]["timeout"] = 0.01
     config = SCRIPT_ENTITY_SCHEMA(deepcopy(raw))
     sequence = await async_validate_actions_config(hass, config["sequence"])
-    return Script(hass, sequence, "Svago startup example", "script", script_mode=config["mode"])
+    return Script(hass, sequence, "Svago readiness example", "script", script_mode=config["mode"])
 
 
-@pytest.mark.parametrize("button_state", ["unknown", "2026-01-01T00:00:00+00:00"])
-async def test_ready_chair_is_pressed_once_without_waiting_for_a_state_change(
-    example_hass, button_state
-):
+async def test_ready_chair_returns_without_waiting_for_a_state_change(example_hass):
     hass, calls = example_hass
     hass.states.async_set(READY, "Ready")
-    hass.states.async_set(BUTTON, button_state)
     script = await make_script(hass)
     await asyncio.wait_for(script.async_run(INPUTS, Context()), timeout=1)
-    assert calls == [{"entity_id": [BUTTON]}]
+    assert not script.is_running and calls == []
 
 
 async def test_waiting_chair_proceeds_when_readiness_arrives(example_hass):
     hass, calls = example_hass
     hass.states.async_set(READY, "Connecting")
-    hass.states.async_set(BUTTON, "unavailable")
     script = await make_script(hass)
     running = asyncio.create_task(script.async_run(INPUTS, Context()))
     await hass.async_block_till_done()
     assert script.is_running and calls == []
     hass.states.async_set(READY, "Ready")
-    hass.states.async_set(BUTTON, "unknown")
     await asyncio.wait_for(running, timeout=1)
-    assert calls == [{"entity_id": [BUTTON]}]
+    assert not script.is_running and calls == []
 
 
-async def test_new_invocation_replaces_the_old_wait_instead_of_pressing_twice(example_hass):
+async def test_new_invocation_replaces_the_old_wait(example_hass):
     hass, calls = example_hass
     hass.states.async_set(READY, "Connecting")
-    hass.states.async_set(BUTTON, "unavailable")
     script = await make_script(hass)
     first = asyncio.create_task(script.async_run(INPUTS, Context()))
     await hass.async_block_till_done()
@@ -77,40 +70,59 @@ async def test_new_invocation_replaces_the_old_wait_instead_of_pressing_twice(ex
     await asyncio.wait_for(first, timeout=1)
     assert not second.done() and calls == []
     hass.states.async_set(READY, "Ready")
-    hass.states.async_set(BUTTON, "unknown")
     await asyncio.wait_for(second, timeout=1)
-    assert calls == [{"entity_id": [BUTTON]}]
+    assert not script.is_running and calls == []
 
 
-@pytest.mark.parametrize(
-    "case", ["missing_button", "unavailable_button", "not_ready", "missing_sensor"]
-)
-async def test_timeout_never_presses_missing_or_unavailable_controls(example_hass, case):
+@pytest.mark.parametrize("state", [None, "Connecting", "unavailable"])
+async def test_timeout_finishes_without_a_chair_action(example_hass, state):
     hass, calls = example_hass
-    if case != "missing_sensor":
-        hass.states.async_set(READY, "Connecting" if case == "not_ready" else "Ready")
-    if case != "missing_button":
-        hass.states.async_set(BUTTON, "unavailable" if case == "unavailable_button" else "unknown")
+    if state is not None:
+        hass.states.async_set(READY, state)
     script = await make_script(hass, short_timeout=True)
     await asyncio.wait_for(script.async_run(INPUTS, Context()), timeout=1)
-    assert calls == []
+    assert not script.is_running and calls == []
 
 
 @pytest.mark.parametrize(
     "inputs",
     [
         {},
-        {"ready_sensor": READY},
-        {"turn_on_button": BUTTON},
-        {**INPUTS, "ready_sensor": ""},
-        {**INPUTS, "turn_on_button": "switch.power"},
-        {**INPUTS, "turn_on_button": None},
+        {"ready_sensor": ""},
+        {"ready_sensor": "switch.example"},
+        {"ready_sensor": None},
+        {"ready_sensor": [READY]},
+        {"ready_sensor": "sensor.invalid space"},
     ],
 )
-async def test_script_fields_are_required_at_runtime(example_hass, inputs):
+async def test_sensor_field_is_validated_at_runtime(example_hass, inputs, caplog):
+    caplog.set_level("INFO", logger="homeassistant.helpers.script")
     hass, calls = example_hass
     hass.states.async_set(READY, "Ready")
-    hass.states.async_set(BUTTON, "unknown")
     script = await make_script(hass)
     await asyncio.wait_for(script.async_run(inputs, Context()), timeout=1)
-    assert calls == []
+    assert "Choose the chair's Connection status sensor." in caplog.text
+    assert not script.is_running and calls == []
+
+
+@pytest.mark.parametrize("ready", [False, True])
+async def test_calling_script_checks_readiness_before_its_action(example_hass, ready):
+    hass, calls = example_hass
+    hass.states.async_set(READY, "Ready" if ready else "Connecting")
+    child = await make_script(hass, short_timeout=True)
+
+    async def wait_until_ready(call):
+        await child.async_run(call.data, call.context)
+
+    hass.services.async_register("script", "svago_wait_until_ready", wait_until_ready)
+    actions = await async_validate_actions_config(
+        hass,
+        [
+            {"action": "script.svago_wait_until_ready", "data": INPUTS},
+            {"condition": "state", "entity_id": READY, "state": "Ready"},
+            {"action": "button.press", "target": {"entity_id": BUTTON}},
+        ],
+    )
+    parent = Script(hass, actions, "Guarded Svago caller", "script")
+    await asyncio.wait_for(parent.async_run({}, Context()), timeout=1)
+    assert calls == ([{"entity_id": [BUTTON]}] if ready else [])

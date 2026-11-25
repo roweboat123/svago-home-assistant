@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc2** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc3** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,12 +9,25 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc2
+## What's new in 1.1.0rc3
 
-Move **Return to neutral** to **Configuration** on the device page, alongside
-Turn on and the memory controls. The owner confirmed that the Home Assistant
-button worked in 1.1.0rc1. This update changes its grouping; the native Home
-command and button behavior are unchanged.
+Direction buttons allow a bounded startup wait when the chair has not yet
+reported forward movement. This addresses diagnostics showing no forward
+position feedback during a half-second footrest press while a slider moved with
+the same commands.
+The new timing still needs confirmation on the chair.
+
+After Return to neutral, the first action that wakes the controller also waits
+for fresh feedback after a two-second settling interval, with a five-second
+maximum after the wake acknowledgment. The owner reports that the first memory
+press only wakes the controller and the second recalls the position, even after
+waiting following Home. This candidate still sends the action once; its physical
+result is not yet confirmed.
+
+The standalone **Turn on** button is removed; actions that need the controller
+awake activate it automatically. **Return to neutral** appears in **Configuration**
+alongside the memory controls. The owner confirmed that it worked in 1.1.0rc1;
+its native command and completion checks are unchanged.
 
 The button sends the native command once and waits for fresh feedback showing
 all four reported positions at zero with heat and massage Off. It stops active
@@ -63,18 +76,27 @@ Replace the `custom_components/svago` folder and restart Home Assistant. Keep yo
 | Return to neutral | Run the native Home operation and stop Continuous renewal |
 | Memory 1–3 | Recall a saved Home Assistant profile, or save while Set memory is on |
 | Set memory | Arm one memory save |
-| Turn on | Wake the chair's controller without toggling it off |
 
-**Turn on**, **Return to neutral**, **Memory 1–3** and **Set memory** appear under
+**Return to neutral**, **Memory 1–3** and **Set memory** appear under
 **Configuration**.
 Other controls appear under **Controls**. The diagnostic sensors appear under
 **Diagnostics**.
 
-Direction buttons stop automatically. Headrest and footrest use half-second
-presses; backrest uses a quarter second. Repeating the same direction extends
-one burst, capped at three seconds, instead of queueing future travel. Stop,
-a reversal or a different adjustment takes over after releasing the old command.
-A direction press at an observed limit quietly does nothing.
+Direction buttons stop automatically. Headrest and footrest normally use
+half-second presses; backrest uses a quarter second. If that interval ends
+without forward feedback, the press continues only until forward movement is
+reported or two seconds from movement start. No progress by that deadline ends
+the press with an error. Repeating the same direction extends one burst, with a
+three-second total cap; it cannot extend the no-progress deadline. Stop, a
+reversal or another adjustment takes over after releasing the old command.
+A press at an observed limit quietly does nothing.
+
+Movement buttons, position sliders, lumbar adjustments, presets, memory recall,
+Heat On and a non-Off massage selection activate the controller automatically
+when needed. Saving a memory, changing heat levels or timers, Off commands and
+Stop do not wake it. Automations can call the desired action after **Ready**.
+Only the first wake after a Home command adds the settling period; reconnecting
+or receiving status does not start a wake or replay an earlier action.
 
 Position ranges are the chair's observed raw units, not percentages: headrest
 0–17, backrest 0–22, seat 0–40 and footrest 0–28. The chair may move the seat while

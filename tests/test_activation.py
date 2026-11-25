@@ -1,13 +1,12 @@
 """Verified neutral On packet, live-state adaptation and ordered activation."""
 
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 from conftest import status_with
 
-from custom_components.svago.button import SvagoButton
 from custom_components.svago.controller import CommandSuperseded, ControlError
+from custom_components.svago.memory_protocol import MemoryProfile
 from custom_components.svago.protocol import Status, checksum
 
 VERIFIED_ON = bytes.fromhex("7E0201001011000000000000000000000000000202020200002C7E")
@@ -22,6 +21,9 @@ def requested_control(chair, control):
         "deflate": lambda: chair.controller.adjust_lumbar(False),
         "movement": lambda: chair.controller.step_position(0, 1),
         "slider": lambda: chair.controller.set_position(0, 8),
+        "memory": lambda: chair.controller.recall_memory(
+            1, MemoryProfile.from_status(status_with(positions=(2, 3, 4, 5)))
+        ),
     }
     return actions[control]()
 
@@ -45,7 +47,9 @@ def test_activation_preserves_reported_positions_and_settings(heat, massage):
     assert packet[25] == checksum(packet)
 
 
-@pytest.mark.parametrize("control", ["heat", "massage", "inflate", "deflate", "movement", "slider"])
+@pytest.mark.parametrize(
+    "control", ["heat", "massage", "inflate", "deflate", "movement", "slider", "memory"]
+)
 async def test_activation_precedes_dependent_command_every_time(chair, control):
     for _ in range(2):
         # A physical remote can turn the chair Off without changing FFF1.
@@ -72,7 +76,7 @@ async def test_off_and_stop_controls_do_not_activate(chair, control):
     assert chair.controller.last_activation is None
 
 
-@pytest.mark.parametrize("control", ["massage", "movement", "slider"])
+@pytest.mark.parametrize("control", ["massage", "movement", "slider", "memory"])
 async def test_old_activation_status_is_not_enough_without_new_response(chair, control):
     chair.controller.accept_status(status_with(**{"5": 0x11}))
     chair.activation_feedback = False
@@ -148,12 +152,9 @@ async def test_activation_refuses_non_numeric_motor_state(chair):
     assert not chair.writes
 
 
-async def test_turn_on_button_uses_same_activation_and_stable_identity(chair):
-    connection = SimpleNamespace(controller=chair.controller, address="02:00:00:00:00:AB")
-    button = SvagoButton(connection, "turn_on", "Turn on", None, None)
-    await button.async_press()
-    await button.async_press()
+async def test_internal_turn_on_is_idempotent(chair):
+    await chair.controller.turn_on()
+    await chair.controller.turn_on()
     assert len(chair.writes) == 2
     assert chair.writes[0] == chair.writes[1]
-    assert button.icon == "mdi:power"
-    assert button.name == "Turn on"
+    assert chair.writes[0][5] == 0x11

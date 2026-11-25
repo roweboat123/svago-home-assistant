@@ -7,16 +7,31 @@ from conftest import status_with
 
 from custom_components.svago.controller import CommandSuperseded, ControlError
 from custom_components.svago.memory_protocol import MemoryProfile
+from custom_components.svago.protocol import Status, checksum
+
+
+def report_one_step_per_burst(chair, reported_bursts):
+    """Observe startup once, then keep reporting that position during the hold."""
+    session = chair.controller._tap_session
+    status = chair.controller.status
+    if session and session["phase"] == "moving" and session["burst_id"] not in reported_bursts:
+        reported_bursts.add(session["burst_id"])
+        raw = bytearray(status.raw)
+        raw[13 + session["index"]] += session["direction"]
+        raw[25] = checksum(raw)
+        status = Status(bytes(raw))
+    chair.controller.accept_status(status)
 
 
 class GatedPulse:
-    """Pause a pulse at each fresh, unchanged position report."""
+    """Pause each poll; report one useful step per burst without hitting a bound."""
 
     def __init__(self, chair):
         self.chair = chair
         self.ticks = asyncio.Queue()
         self.permits = asyncio.Queue()
         self.free = False
+        self.reported_bursts = set()
         chair.feedback = False
         chair.activation_feedback = True
         chair.controller.accept_status(status_with(positions=(5, 3, 16, 10)))
@@ -24,7 +39,7 @@ class GatedPulse:
 
     async def sleep(self, seconds):
         self.chair.time += seconds
-        self.chair.controller.accept_status(self.chair.controller.status)
+        report_one_step_per_burst(self.chair, self.reported_bursts)
         self.ticks.put_nowait(self.chair.time)
         if not self.free:
             await self.permits.get()
@@ -97,6 +112,9 @@ async def test_many_repeated_presses_have_three_second_cap_and_bounded_diagnosti
             "direction_writes": 30,
             "coalesced_presses": 29,
             "effective_pulse_seconds": 3,
+            "startup_extended": False,
+            "startup_outcome": "progress_observed",
+            "first_progress_seconds": 0.1,
             "stop_outcome": "write_returned",
         }
     assert chair.controller._tap_session is None
@@ -108,6 +126,8 @@ async def test_many_repeated_presses_have_three_second_cap_and_bounded_diagnosti
 async def test_startup_presses_join_activation_without_building_travel_backlog(chair):
     chair.feedback = False
     chair.activation_feedback = True
+    reported_bursts = set()
+    chair.on_sleep = lambda: report_one_step_per_burst(chair, reported_bursts)
     entered, release = asyncio.Event(), asyncio.Event()
 
     async def delayed_write(packet):

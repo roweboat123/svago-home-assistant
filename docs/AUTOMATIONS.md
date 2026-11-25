@@ -7,19 +7,22 @@ For an automation, wait for **Connection status → Ready** before issuing a cha
 command. Use a wait for a template, so an already-ready chair proceeds at once;
 a wait for a state-change trigger alone can miss that case.
 
-## A chair that stays powered on
+## Wait for connection readiness
 
-Copy [start_when_ready.yaml](../examples/start_when_ready.yaml) into a new script
+Copy [wait_until_ready.yaml](../examples/wait_until_ready.yaml) into a new script
 using **Settings → Automations & scenes → Scripts → Add script → Edit in YAML**.
-Save it, then run it with your chair's **Connection status** sensor and **Turn on**
-button. The fields use entity selectors, so no example entity IDs need to match
-your system. Choose both entities from the same chair. Supply both fields when
-calling the script from an automation as well; they are checked at runtime.
+Save it, then run it with your chair's **Connection status** sensor. The field
+uses an entity selector, so no example entity ID needs to match your system.
+Supply that field when calling the script from an automation as well; it is
+checked at runtime.
 
-The script waits up to one minute, then presses Turn on once. If readiness never
-arrives, it exits without a chair command. An overlapping invocation replaces the
-older wait. This script does not choose a memory, move the chair, or start heat
-or massage. Those can be explicit subsequent actions in your own automation.
+The script waits up to one minute and sends no chair commands. An overlapping
+invocation replaces the older wait. Afterward, your automation can perform its
+chosen action once its own readiness condition passes.
+
+If an existing automation or startup script references the removed Turn on
+button, replace that step with this wait and the desired chair action, guarded
+by the Ready condition below.
 
 Call the script directly from an automation to wait for it to finish. Using
 `script.turn_on` starts it in the background and does not wait for readiness.

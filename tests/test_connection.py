@@ -152,7 +152,7 @@ async def test_diagnostics_retains_exact_frames_after_disconnect_without_writing
         None, SimpleNamespace(runtime_data=connection)
     )
     assert endpoint.write_gatt_char.await_count == before
-    assert result["version"] == "1.1.0rc2"
+    assert result["version"] == "1.1.0rc3"
     assert result["last_status_hex"] == TV_STATUS.hex().upper()
     assert result["connected"] is False
     assert any(
@@ -215,7 +215,7 @@ async def test_diagnostics_before_setup_has_no_connection_side_effects():
     from custom_components.svago.diagnostics import async_get_config_entry_diagnostics
 
     assert await async_get_config_entry_diagnostics(None, SimpleNamespace()) == {
-        "version": "1.1.0rc2",
+        "version": "1.1.0rc3",
         "connection_initialized": False,
     }
 
@@ -241,6 +241,8 @@ async def test_tap_trace_survives_rollover_and_export_is_independent(transport):
     async def acknowledge_activation(_characteristic, payload, **_kwargs):
         if payload[5] == 0x11:
             endpoint.callback(endpoint.notify, status_with(**{"5": 0x11}).raw)
+        elif payload[13] == 0x82:
+            endpoint.callback(endpoint.notify, status_with(positions=(6, 6, 16, 28)).raw)
 
     endpoint.write_gatt_char.side_effect = acknowledge_activation
     await connection.controller.step_position(0, 1)
@@ -249,7 +251,7 @@ async def test_tap_trace_survives_rollover_and_export_is_independent(transport):
     count = endpoint.write_gatt_char.await_count
     trace = connection.diagnostics()["tap_requests"][-1]
     assert trace["outcome"] == "pulse_completed"
-    assert trace["feedback_changed"] is False
+    assert trace["feedback_changed"] is True
     assert trace["direction_writes"] == count - 2  # Activation and final release.
     assert trace["stop"]["command_hex"] == endpoint.write_gatt_char.await_args.args[1].hex().upper()
     trace["direction_write_log"][0]["outcome"] = "changed snapshot"

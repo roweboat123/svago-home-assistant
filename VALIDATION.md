@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc2
+# Validation — Svago 1.1.0rc3
 
 ## Scope
 
@@ -7,14 +7,16 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Local validation of 1.1.0rc1 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**1,033 tests** on each, plus Ruff lint and formatting.
-Five dependency deprecation warnings remain on each version. The 34 added cases
-cover the exact native Home frame, captured nonmonotonic travel, fresh feedback
-after write completion, stable neutral detection, interruption, reconnects,
-Continuous session handling, independent button availability and detached
-diagnostics. Existing tests retain coverage for memory-data preservation, fresh
-comfort acknowledgments and elapsed lumbar deadlines. Reproduce these checks with
+Local validation of 1.1.0rc3 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+**1,079 tests** on each, plus Ruff lint and formatting.
+Five dependency deprecation warnings remain on each version. Coverage includes
+bounded directional startup, fresh feedback after the post-Home wake interval,
+interruption and reconnect handling, removal of the standalone Turn on entity,
+and the readiness-only automation example with its guarded caller. Existing
+tests retain the exact native Home frame, captured nonmonotonic travel, stable
+neutral detection, Continuous sessions, memory-data preservation, fresh comfort
+acknowledgments and elapsed lumbar deadlines. The preceding rc1 baseline passed
+1,033 tests on each Home Assistant version. Reproduce these checks with
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The exact native Home packet was captured from the
@@ -23,10 +25,32 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc2 moves Return to neutral from Controls to Configuration. Its
-entity identity, command and controller behavior are unchanged. The category
-change does not require repeating the physical test. This remains a release
-candidate; 1.0.2 is the latest stable release.
+Version 1.1.0rc3 retains Return to neutral under Configuration and removes the
+standalone Turn on button. Home's entity identity, native command and completion
+checks are unchanged. This remains a release candidate; 1.0.2 is the latest
+stable release.
+
+The new directional-startup handling addresses diagnostics where a half-second
+footrest press showed no forward position feedback while a slider moved using
+the same direction commands. This supports a startup-timing hypothesis without
+establishing the cause. The candidate bounds startup waiting to two seconds and
+keeps the three-second absolute burst cap; its physical result is still pending.
+
+The owner reports that the first memory press after Home only wakes the wired
+controller and the second performs recall, regardless of time spent waiting
+after Home. One diagnostic capture contains a neutral Memory 1 recall followed
+by a successful nonneutral Memory 3 recall, so it does not capture that failure.
+In a separate controlled check, the owner went directly from Home to Memory 3
+and confirmed that the first press only woke the controller; the second moved it.
+The candidate tracks a Home write attempt, then waits for a fresh report after
+a two-second settling interval following the next foreground wake acknowledgment.
+Healthy feedback completes this wait in about two seconds; the existing
+three-second stale-feedback limit gives a five-second total bound on this wait.
+The wake command and dependent memory target each remain single sends. Normal
+actions without a preceding Home retain their timing; Home, reconnects and passive
+status never start a wake on their own. The explanation and physical success of
+this settling period are unconfirmed; the tap change does not establish a fix
+for the separate memory-recall report.
 
 The owner previously reported completing internal testing of the fixes supplied
 for stable 1.0.2. This candidate retains those fixes.
@@ -60,8 +84,10 @@ empty-memory setup are also checked during release preparation.
 - The owner confirmed seamless reconnection with the power-cycle recovery fix.
   No manual integration reload was needed in the reported successful test.
 - Movement, lumbar, heat on/off and massage controls were exercised on the chair.
-  Half-second headrest and footrest button bursts resolved the observed lack of
-  movement with shorter taps. Backrest taps retain quarter-second timing.
+  Half-second headrest and footrest button bursts previously improved movement
+  with shorter taps. Later diagnostics showed a half-second footrest press
+  without forward feedback while slider movement worked; the rc3 startup change
+  has not yet been physically confirmed.
 - The idempotent activation command turns the wired controller on when needed;
   repeating it does not toggle it off.
 - Status notifications reflect changes made with the physical controls. A
@@ -130,7 +156,10 @@ requests retain cancellation and ordering checks. Newer memory requests supersed
 older pending requests.
 
 Same-direction taps join an active burst, with a three-second maximum from the
-start of that burst. Reverse, another axis, a slider, memory or Stop use the
+start of that burst. Without forward progress, the normal pulse can extend only
+until the first forward report or the two-second startup deadline. Joined
+presses cannot extend that deadline. No progress produces a released command
+and an explicit failure. Reverse, another axis, a slider, memory or Stop use the
 existing stop-before-handoff behavior. Observed endpoints and already-reached
 slider targets are quiet no-ops. Genuine transport, feedback and stop failures
 remain visible in diagnostics and service results.
@@ -144,7 +173,10 @@ Last problem remain readable when controls are unavailable. Detailed reports
 retain transport history and command outcomes while redacting device addresses.
 
 Normal use requires a powered chair and an available Bluetooth connection.
-The optional startup example waits for Ready before pressing Turn on.
+Movement buttons, sliders, lumbar adjustments, presets, memory recall, Heat On
+and non-Off massage automatically activate the controller when needed. Memory
+saving, heat-level/timer settings, Off and Stop do not wake it. Automations wait
+for Ready before their requested action; there is no separate Turn on button.
 Setup, diagnostic publishing and preference restoration introduce no activation
 or movement writes.
 
@@ -157,10 +189,15 @@ failure returns to the existing setup or reconnect retry mechanism.
 
 ## Recorded limits and release checks
 
+The new startup timing needs an on-chair check of the affected direction buttons
+and first-press Memory 1–3 recall after Home. Neither is yet a confirmed fix for
+the reported behavior. The [candidate guide](docs/HOME-TEST.md) gives those focused
+checks; unrelated long Continuous timing tests are not part of this check.
+
 The successful HA Home test does not separately establish each interruption or
 comfort-function case. The [Home guide](docs/HOME-TEST.md) retains optional checks
-for collecting that additional evidence, without requiring another chair test
-for this category-only update. Longer renewal schedules and combined
+for collecting that additional evidence; Home's category change does not require
+repeating its successful test. Longer renewal schedules and combined
 heat/massage behavior retain their existing physical-validation limits.
 
 Require successful configured GitHub validation workflows for the exact source
