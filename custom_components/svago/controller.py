@@ -6,6 +6,7 @@ import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from math import ceil
 
 from .memory_protocol import MemoryProfile
@@ -26,8 +27,9 @@ from .protocol import (
 
 _LOGGER = logging.getLogger(__name__)
 # Headrest and footrest use the physically confirmed longer burst after
-# nonresponsive 0.25 s presses. Backrest and seat retain their existing timing.
-MOTOR_PULSE_SECONDS = (0.5, 0.25, 0.25, 0.5)
+# nonresponsive 0.25 s presses. Shorten the backrest's nominal pulse for finer
+# adjustment; seat retains 0.25 s. Startup feedback guards still apply.
+MOTOR_PULSE_SECONDS = (0.5, 0.1, 0.25, 0.5)
 MOTOR_REPEAT_SECONDS = 0.1
 LUMBAR_BURST_SECONDS = 3.0
 # Repeated taps extend the current gesture, never a backlog of future travel.
@@ -62,6 +64,16 @@ class ControlError(Exception):
 
 class CommandSuperseded(Exception):
     """A newer user request replaced this request; not a user-facing error."""
+
+
+@dataclass(frozen=True)
+class _OperationRequest:
+    """Keep ordering and the Home outcome across locks and memory storage reads."""
+
+    generation: int
+    request_id: int
+    intent_sequence: int
+    home_completion: asyncio.Future[bool] | None
 
 
 def _check_movement_feedback(position, start, best, direction, bounds, elapsed):
@@ -121,6 +133,7 @@ class Controller:
         self._wired_controller_power: str | None = None
         self._wired_controller_power_basis = "No completed HA wake or Return to neutral command"
         self._home_session: dict | None = None
+        self._home_completion: asyncio.Future[bool] | None = None
         self._home_wake_pending = False
         self._home_wake_epoch = 0
         self.setting_requests: deque[dict] = deque(maxlen=5)
@@ -341,6 +354,10 @@ class Controller:
         self._intent_sequence += 1
         self._needs_stop = False
         self._home_session = None
+        if self._home_completion is not None:
+            if not self._home_completion.done():
+                self._home_completion.set_result(False)
+            self._home_completion = None
         self.connected = connected
         self.status = None
         self._received_at = float("-inf")
@@ -451,6 +468,15 @@ class Controller:
         self._current(generation)
         # Register intent before waiting for another setting's acknowledgment.
         self._intent_sequence += 1
+        # During Home, reserve before the settings lock so newer choices replace
+        # older waiting settings instead of building a post-Home command queue.
+        request = (
+            self._reserve_operation(configuration=True)
+            if self._home_completion is not None
+            else None
+        )
+        if request is not None:
+            await self._wait_for_home(request)
         async with self._settings_lock:
             # A queued action invalidated by failure, replacement or reconnect
             # is not another fresh command failure. Discard it before checking
@@ -458,47 +484,100 @@ class Controller:
             if generation != self._generation or epoch != self._settings_epoch:
                 raise CommandSuperseded
             self._current(generation)
+            entered = False
             try:
-                async with self._operation(configuration=True) as generation:
+                async with self._operation(configuration=True, request=request) as generation:
+                    entered = True
                     yield generation
-            except BaseException:
+            except BaseException as exc:
                 # A failed/unconfirmed setting must not be silently overwritten
-                # by requests already waiting behind it.
-                self._settings_epoch += 1
+                # by requests already waiting behind it. Only an obsolete Home
+                # waiter that never entered can leave its newer choice intact.
+                if (
+                    entered
+                    or request is None
+                    or not isinstance(exc, (CommandSuperseded, asyncio.CancelledError))
+                    or (
+                        request.request_id == self._request_id
+                        and request.intent_sequence == self._intent_sequence
+                    )
+                ):
+                    self._settings_epoch += 1
                 raise
 
-    @asynccontextmanager
-    async def _operation(self, *, configuration=False):
+    def _reserve_operation(self, *, configuration=False, interrupt_home=False):
         generation = self._generation
         self._current(generation)
         if not configuration:
             self._settings_epoch += 1
             self._intent_sequence += 1
+        self._request_id += 1
+        return _OperationRequest(
+            generation,
+            self._request_id,
+            self._intent_sequence,
+            None if interrupt_home else self._home_completion,
+        )
+
+    def _check_request(self, request: _OperationRequest) -> None:
+        if (
+            request.generation != self._generation
+            or request.request_id != self._request_id
+            or (
+                request.home_completion is not None
+                and request.intent_sequence != self._intent_sequence
+            )
+        ):
+            raise CommandSuperseded
+
+    async def _wait_for_home(self, request: _OperationRequest) -> None:
+        self._check_request(request)
+        if request.home_completion is not None:
+            # A caller cancelling its follow-up must never cancel native Home.
+            completed = await asyncio.shield(request.home_completion)
+            self._check_request(request)
+            if not completed:
+                raise ControlError(
+                    "Return to neutral did not complete; the waiting action was not sent."
+                )
+
+    @asynccontextmanager
+    async def _operation(
+        self, *, configuration=False, request=None, native_home=False, interrupt_home=False
+    ):
+        if request is None:
+            request = self._reserve_operation(
+                configuration=configuration, interrupt_home=interrupt_home
+            )
+        if not configuration:
             self._reset_position_stability()
+        await self._wait_for_home(request)
+        generation = request.generation
         task = asyncio.current_task()
         assert task is not None
-        self._request_id += 1
-        request_id = self._request_id
+        home_completion = None
+        completed = False
         async with self._transition:
-            if generation != self._generation or request_id != self._request_id:
-                raise CommandSuperseded
+            self._check_request(request)
             if self._active is not None:
                 self._needs_stop = True
             await self._cancel_active(superseded=True)
-            if generation != self._generation or request_id != self._request_id:
-                raise CommandSuperseded
+            self._check_request(request)
             self._current(generation)
             if self._needs_stop:
                 # Finish the handoff before any new action. If this stop fails,
                 # the replacement action must not start on top of old movement.
                 await self._send(generation, motors=(0x80,) * 4, lumbar=0)
                 self._needs_stop = False
-            if generation != self._generation or request_id != self._request_id:
-                raise CommandSuperseded
+            self._check_request(request)
             self._active = task
+            if native_home:
+                home_completion = asyncio.get_running_loop().create_future()
+                self._home_completion = home_completion
             self._changed()
         try:
             yield generation
+            completed = True
         except asyncio.CancelledError:
             if task in self._superseded:
                 task.uncancel()
@@ -508,6 +587,11 @@ class Controller:
             self._superseded.discard(task)
             if self._active is task:
                 self._active = None
+            if home_completion is not None:
+                if self._home_completion is home_completion:
+                    self._home_completion = None
+                if not home_completion.done():
+                    home_completion.set_result(completed and generation == self._generation)
             self._changed()
 
     async def _send(self, generation: int, **changes) -> None:
@@ -680,6 +764,11 @@ class Controller:
         completion separately records a command-based controller-power estimate.
         Native travel can be staged and briefly move away from zero.
         """
+        if self._home_completion is not None:
+            # A repeated Home replaces the pending follow-up, not the native
+            # cycle already in progress. Do not dispatch Home a second time.
+            await self._wait_for_home(self._reserve_operation())
+            return
         trace = {
             "outcome": "pending",
             "command_hex": HOME_COMMAND.hex().upper(),
@@ -691,7 +780,7 @@ class Controller:
         requested_at = self._clock()
         session = None
         try:
-            async with self._operation() as generation:
+            async with self._operation(native_home=True) as generation:
                 status = self._current(generation)
                 if not self._home_positions_valid(status):
                     raise ControlError("Current position is outside the observed range.")
@@ -870,27 +959,26 @@ class Controller:
             raise ControlError("Unexpected memory position feedback; movement stopped.")
         return positions
 
-    def reserve_memory_recall(self) -> tuple[int, int]:
+    def reserve_memory_recall(self) -> _OperationRequest:
         """Order a recall before storage I/O without touching movement or timers.
 
         A later request, Stop or reconnect invalidates this reservation. Two
         pending recalls are ordered here, rather than by storage completion.
         """
-        self._current(self._generation)
-        self._request_id += 1
-        self._intent_sequence += 1
-        self._settings_epoch += 1
-        return self._generation, self._intent_sequence
+        return self._reserve_operation()
 
     async def recall_memory(
-        self, slot: int, profile: MemoryProfile, *, request: tuple[int, int] | None = None
+        self, slot: int, profile: MemoryProfile, *, request: _OperationRequest | None = None
     ) -> None:
         """Apply one saved full-state target and monitor its reported completion.
 
         This adapts the captured remote memory messages to HA-owned profiles.
         Physical recall from arbitrary positions still needs on-chair validation.
         """
-        if request is not None and request != (self._generation, self._intent_sequence):
+        if request is not None and (request.generation, request.intent_sequence) != (
+            self._generation,
+            self._intent_sequence,
+        ):
             raise CommandSuperseded
         if type(slot) is not int or slot not in (1, 2, 3):
             raise ControlError("Choose Memory 1, 2 or 3.")
@@ -912,7 +1000,7 @@ class Controller:
         self.memory_requests.append(trace)
         requested_at = self._clock()
         try:
-            async with self._operation() as generation:
+            async with self._operation(request=request) as generation:
                 recall_intent = self._request_id, self._intent_sequence
                 self._memory_positions(self._current(generation))
                 await self._activate(generation, "memory")
@@ -2162,5 +2250,5 @@ class Controller:
                 pass
 
     async def stop_movement(self) -> None:
-        async with self._operation() as generation:
+        async with self._operation(interrupt_home=True) as generation:
             await self._send(generation, motors=(0x80,) * 4, lumbar=0)

@@ -119,8 +119,14 @@ async def test_directional_step_leaves_other_motors_untouched_then_releases(
     assert list(chair.writes[1][13:17]) == expected
     assert chair.writes[1][19] == 2
     boundary = OBSERVED_BOUNDS[index][1 if direction > 0 else 0]
-    increments = min(5 if index in (0, 3) else 3, abs(boundary - before.positions[index]))
-    assert len(chair.writes) == increments + 2
+    remaining = abs(boundary - before.positions[index])
+    allowed_increments = (1, 2) if index == 1 else ((5, 1, 3, 5)[index],)
+    increments = len(chair.writes) - 2
+    # The real-clock deadline can shorten the fake clock's first sleep slightly,
+    # permitting a final repeat just before the nominal 0.1 s boundary.
+    assert increments in {min(count, remaining) for count in allowed_increments}
+    if index == 1:
+        assert chair.time == pytest.approx(0.1)
     assert chair.writes[-1][13:17] == b"\x80" * 4
     positions = list(before.positions)
     positions[index] += direction * increments
@@ -281,7 +287,7 @@ async def test_stale_mid_burst_does_not_write_old_heat(chair):
     "index,name,duration,write_times",
     [
         (0, "headrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
-        (1, "backrest", 0.25, [0, 0.1, 0.2]),
+        (1, "backrest", 0.1, [0]),
         (2, "seat", 0.25, [0, 0.1, 0.2]),
         (3, "footrest", 0.5, [0, 0.1, 0.2, 0.3, 0.4]),
     ],
@@ -304,7 +310,16 @@ async def test_axis_pulse_with_early_progress_keeps_nominal_duration_and_release
             chair.controller.accept_status(status_with(positions=positions))
             reported = True
 
-    chair.on_sleep = first_progress
+    async def sleep_with_early_feedback(seconds):
+        # Notify before even the shortest nominal pulse expires, as a Bluetooth
+        # callback may arrive while the normal polling sleep is still pending.
+        finished = chair.time + seconds
+        chair.time += seconds / 2
+        first_progress()
+        chair.time = finished
+        await asyncio.sleep(0)
+
+    chair.controller._sleep = sleep_with_early_feedback
     await chair.controller.step_position(index, direction)
     assert len(chair.writes) == len(write_times) + 2
     assert chair.time == pytest.approx(duration)

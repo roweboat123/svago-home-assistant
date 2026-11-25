@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc7** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc8** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,15 +9,24 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc7
+## What's new in 1.1.0rc8
 
-- Add **Recall saved memory** (`svago.recall_memory`) for automations. It recalls
-  exactly one Memory button and never saves; it is blocked while Set memory is
-  armed or a save is in progress. Existing automations are not changed automatically.
-- Preserve Continuous heat and massage sessions when a preset fails before its
-  write begins. Renewal stops when the preset write begins.
-- If a slider's final stop write fails, require a stop
-  before the next control on that connection.
+**Return to neutral** now completes before a requested movement, memory recall,
+preset or comfort setting runs. You can choose the next control while Home is
+travelling: only the latest choice waits, and a newer choice replaces it.
+**Stop movement** interrupts Home immediately and discards the waiting action.
+If Home fails or the connection is lost, the waiting action is discarded.
+
+Backrest direction buttons now normally use a **0.1-second pulse**, reduced from
+0.25 seconds. If no forward movement has been reported when that pulse ends,
+the command can continue until the first forward report or the existing
+two-second startup deadline. The physical adjustment size is not fixed.
+
+The owner reports a footrest failure with both the raise button and HA position
+slider following interrupted Home. The wired controller could raise it, and HA
+Footrest raise worked after Home completed fully. These observations motivate
+the Home-completion change; the firmware cause and this candidate's physical
+effectiveness remain unverified.
 
 The pause after the first wake following Return to neutral remains **0.25 seconds**.
 It still requires a fresh report after the pause, so the wait may take about 0.3 seconds
@@ -91,13 +100,14 @@ Other controls appear under **Controls**. The diagnostic sensors appear under
 **Diagnostics**.
 
 Direction buttons stop automatically. Headrest and footrest normally use
-half-second presses; backrest uses a quarter second. If that interval ends
+half-second presses; backrest uses 0.1 seconds. If that interval ends
 without forward feedback, the press continues only until forward movement is
 reported or two seconds from movement start. No progress by that deadline ends
 the press with an error. Repeating the same direction extends one burst, with a
 three-second total cap; it cannot extend the no-progress deadline. Stop, a
 reversal or another adjustment takes over after releasing the old command.
-A press at an observed limit quietly does nothing.
+A press at an observed limit quietly does nothing. Each press's physical
+adjustment size depends on the chair's response and is not fixed.
 
 Movement buttons, position sliders, lumbar adjustments, presets, memory recall,
 Heat On and a non-Off massage selection activate the controller automatically
@@ -120,7 +130,10 @@ the Bluetooth remote. The exact invocation includes timer resets and heat-zone
 selections of backrest Low, seat Off and footrest Low, with master heat Off.
 Reported neutral positions do not independently measure controller power or
 lumbar pressure. The diagnostic controller state is an estimate based on HA
-actions. Other controls and **Stop movement** can interrupt the request.
+actions. Movement, recall, presets and comfort/settings requests wait for Home
+to complete, keeping only the latest request. Pressing Return to neutral again
+joins the current Home and clears a waiting follow-up without resending Home.
+**Stop movement** interrupts Home immediately and clears the waiting request.
 
 ## Continuous heat and massage
 

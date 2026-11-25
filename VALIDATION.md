@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc7
+# Validation — Svago 1.1.0rc8
 
 ## Scope
 
@@ -7,11 +7,13 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Local validation of 1.1.0rc7 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**1,138 tests** on each, plus Ruff lint and formatting.
+Local validation of 1.1.0rc8 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+**1,174 tests** on each, plus Ruff lint and formatting.
 Five dependency deprecation warnings remain on each version. New checks exercise
-recall-only targeting and request ordering, failures before preset writes, and
-uncertain final slider-stop delivery. Existing coverage includes
+Home completion with only the latest follow-up, Stop and failure handling,
+delayed memory lookup and settings-lock races, and the shorter backrest pulse.
+Existing coverage includes recall-only targeting, failures before preset writes,
+uncertain final slider-stop delivery,
 the estimated controller state, its diagnostic sensor and export, uncertainty
 after interrupted feedback or commands, and passive feedback without power
 inference. It also covers bounded directional startup, fresh feedback after the
@@ -30,16 +32,46 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc7 retains Return to neutral under Configuration and the removal of
+Version 1.1.0rc8 retains Return to neutral under Configuration and the removal of
 the standalone Turn on button. Home's entity identity, native command and completion
 checks are unchanged. This remains a release candidate; 1.0.2 is the latest
 stable release.
 
-This candidate adds a recall-only action for a single Memory button, preserves
+This candidate retains rc7's recall-only action for a single Memory button, preserves
 Continuous sessions when a preset fails before its write, and retains the stop
 requirement when a slider's final release delivery is uncertain. The new action
 does not enter the save path, and existing automations are not converted to it.
-The manual archive now includes its YAML action metadata.
+The manual archive includes its YAML action metadata.
+
+Version rc8 protects Home completion before a following control runs and reduces
+the normal backrest direction pulse from 0.25 to 0.1 seconds.
+Headrest and footrest remain at 0.5 seconds, and seat
+remains at 0.25 seconds. The 0.1-second repeat cadence, two-second startup deadline
+and three-second burst cap are unchanged. A normal pulse can still extend until
+the first forward report or the startup deadline; physical step size is not fixed.
+
+The latest rc7 footrest report contains four no-progress errors across three
+command bursts and one joined press. Writes returned successfully, feedback
+stayed fresh but unchanged, and there were no disconnects. The owner confirms
+that the footrest physically stayed still and that the HA footrest slider also
+fails. The latest Home request was interrupted by Headrest inward. In the failed
+HA state, the owner could raise the footrest with the wired controller. After
+Return to neutral completed fully, HA Footrest raise worked again. These
+observations focus the investigation on the handoff after interrupted Home;
+the exact firmware reason is unverified. Protected Home completion is a software
+candidate based on that evidence, not a confirmed on-chair fix.
+
+While native Home is active, foreground movement, recall, preset and
+comfort/settings requests wait for it to complete. Only the latest request is
+retained. Repeated Home joins the current operation and clears any waiting
+follow-up without resending Home. Stop immediately cancels Home and the waiting
+action. Home failure, timeout, stale feedback, disconnect or unload discard
+waiting controls without sending their wake or target. Cancelling a waiting
+caller leaves Home running and does not revive an older request. A new explicit
+control after Stop remains allowed; no Home or queued control is replayed
+automatically. Normal chair response to controls after a deliberate mid-Home
+Stop has not been established. Set memory still cannot be armed while the chair
+is busy.
 
 The new **Wired controller (estimated)** diagnostic sensor is enabled by default.
 It estimates On after a successful HA wake and Off after successful HA Return to
@@ -51,8 +83,8 @@ has been decoded; physical controls and the
 Bluetooth remote can make this action-based estimate wrong without detectable
 feedback.
 
-The new directional-startup handling addresses diagnostics where a half-second
-footrest press showed no forward position feedback while a slider moved using
+The directional-startup handling introduced in rc3 addressed an earlier capture
+where a half-second footrest press showed no forward feedback while a slider moved using
 the same direction commands. This supports a startup-timing hypothesis without
 establishing the cause. The candidate bounds startup waiting to two seconds and
 keeps the three-second absolute burst cap. The owner subsequently confirmed that
@@ -72,8 +104,8 @@ The wake command and dependent memory target each remain single sends. Normal
 actions without a preceding Home retain their timing; Home, reconnects and passive
 status never start a wake on their own. The owner initially reported that rc5
 worked as intended, then reported intermittent Home-to-Memory-3 recall: the wired
-controller wakes, but recall occasionally does not start. The latest diagnostics
-were produced with rc6 installed: the recorded action was Memory 1 after Home,
+controller wakes, but recall occasionally does not start. Earlier rc6 diagnostics
+recorded Memory 1 after Home,
 with a post-wake settling interval of approximately 0.301 seconds. The owner is
 revising the Memory 3/Memory 1 toggle automation as a possible contributor.
 Its role is unconfirmed, and reliable first-press recall still needs verification.
@@ -189,7 +221,9 @@ during storage lookup invalidates an older recall. Its integration activity is
 recorded as Recall, but it does not update HA's button last-pressed timestamp;
 neither record proves physical movement.
 
-Same-direction taps join an active burst, with a three-second maximum from the
+Backrest taps normally use 0.1 seconds; headrest and footrest use 0.5 seconds,
+and the internal seat pulse remains 0.25 seconds. Same-direction taps join an
+active burst, with a three-second maximum from the
 start of that burst. Without forward progress, the normal pulse can extend only
 until the first forward report or the two-second startup deadline. Joined
 presses cannot extend that deadline. No progress produces a released command

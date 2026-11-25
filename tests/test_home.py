@@ -338,8 +338,7 @@ async def test_cancellation_stops_home_with_current_fresh_settings(home_chair):
         await asyncio.gather(task, return_exceptions=True)
 
 
-@pytest.mark.parametrize("replacement", ["stop", "manual"])
-async def test_new_action_stops_pending_home_before_replacing_it(home_chair, replacement):
+async def test_explicit_stop_interrupts_pending_home(home_chair):
     chair = home_chair
     waiting = asyncio.Event()
 
@@ -353,22 +352,13 @@ async def test_new_action_stops_pending_home_before_replacing_it(home_chair, rep
         await asyncio.wait_for(waiting.wait(), 1)
         chair.controller._sleep = chair.sleep
         chair.on_sleep = lambda: chair.controller.accept_status(chair.controller.status)
-        if replacement == "stop":
-            await chair.controller.stop_movement()
-        else:
-            await chair.controller.step_position(0, 1)
+        await chair.controller.stop_movement()
         with pytest.raises(CommandSuperseded):
             await task
         assert_home_once(chair)
         following = chair.writes[1:]
         assert following[0][13:17] == b"\x80" * 4
-        if replacement == "stop":
-            assert all(packet[13:17] == b"\x80" * 4 for packet in following)
-        else:
-            activation = next(i for i, packet in enumerate(following) if packet[5] == 0x11)
-            assert activation >= 1
-            assert all(packet[13:17] == b"\x80" * 4 for packet in following[:activation])
-            assert following[activation + 1][13] == 0x82
+        assert all(packet[13:17] == b"\x80" * 4 for packet in following)
         assert chair.controller.last_home_request["outcome"] == "replaced_by_new_request"
     finally:
         task.cancel()

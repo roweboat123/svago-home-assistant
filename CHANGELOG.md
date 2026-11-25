@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.1.0rc8 — 2026-11-24
+
+- Let native Home complete before the latest requested movement, recall, preset
+  or comfort/settings action runs. New choices replace the waiting choice;
+  repeated Home joins the current operation without resending it and clears the
+  waiting follow-up. Stop interrupts Home and discards pending controls.
+- Discard waiting controls if Home fails, times out, loses fresh feedback, or
+  disconnects. Do not replay them after reconnecting.
+- Shorten the normal backrest direction pulse from 0.25 to 0.1 seconds. Keep
+  headrest and footrest pulses at 0.5 seconds and the seat pulse at 0.25 seconds.
+- Retain the 0.1-second repeat cadence, two-second startup deadline and
+  three-second burst cap. Without forward feedback, a pulse can still extend
+  until the first forward report or the startup deadline; physical step size
+  is not fixed.
+
+The owner could raise the footrest with the wired controller in the failed HA
+state, and HA raise worked after Home completed fully. These observations motivate
+the Home handoff change; the firmware reason and candidate's physical success
+remain unverified. Wake packets, wake settling time, stored memories and the
+estimated-controller sensor are unchanged. Version 1.0.2 remains the latest stable
+release.
+
 ## 1.1.0rc7 — 2026-11-24
 
 - Add `svago.recall_memory` for exactly one Memory button. It can only recall,

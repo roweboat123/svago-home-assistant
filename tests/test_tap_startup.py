@@ -132,12 +132,20 @@ async def test_delayed_startup_continues_same_direction_until_first_net_progress
 
 
 @pytest.mark.parametrize(
-    "index,nominal,writes", [(0, 0.5, 5), (1, 0.25, 3), (2, 0.25, 3), (3, 0.5, 5)]
+    "index,nominal,writes", [(0, 0.5, 5), (1, 0.1, 1), (2, 0.25, 3), (3, 0.5, 5)]
 )
 async def test_prompt_progress_keeps_existing_nominal_tap(chair, index, nominal, writes):
     prepare(chair, index=index, position=5)
-    chair.on_sleep = lambda: report(chair, index, 6)
 
+    async def sleep_with_early_feedback(seconds):
+        # A prompt report must arrive before the new 0.1 s backrest deadline.
+        finished = chair.time + seconds
+        chair.time += seconds / 2
+        report(chair, index, 6)
+        chair.time = finished
+        await asyncio.sleep(0)
+
+    chair.controller._sleep = sleep_with_early_feedback
     await chair.controller.step_position(index, 1)
 
     assert chair.time == pytest.approx(nominal)
@@ -145,7 +153,7 @@ async def test_prompt_progress_keeps_existing_nominal_tap(chair, index, nominal,
     assert len(stops(chair)) == 1
     trace = chair.controller.tap_requests[-1]
     assert trace["startup_extended"] is False
-    assert trace["first_progress_seconds"] == pytest.approx(0.1)
+    assert trace["first_progress_seconds"] == pytest.approx(0.05)
     assert trace["startup_outcome"] == "progress_observed"
 
 

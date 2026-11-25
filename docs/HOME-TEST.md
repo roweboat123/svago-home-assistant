@@ -1,22 +1,32 @@
-# Home and startup candidate checks — 1.1.0rc7
+# Home and startup candidate checks — 1.1.0rc8
 
 The chair's exact native Home command was captured from Bluetooth remote
 power-off and successfully replayed from a phone without disconnecting. The owner
 then confirmed that **Return to neutral** worked in Home Assistant with 1.1.0rc1.
-Version 1.1.0rc7 retains that button under **Configuration**, with the same entity
-identity and behavior. The retained quarter-second pause was observed in rc6
-diagnostics; reliable first-press recall after Home still needs confirmation.
+Version 1.1.0rc8 retains that button under **Configuration**, with the same entity
+identity and native command. It now finishes Home before running the latest
+requested movement, recall, preset or comfort/settings action. Stop remains
+immediate and clears any waiting action. The retained quarter-second pause was
+observed in rc6 diagnostics; reliable first-press recall still needs confirmation.
 Version 1.0.2 remains the stable release.
+
+This candidate shortens the normal backrest pulse to 0.1 seconds. Without
+forward feedback it can still continue until the first forward report or the
+two-second startup deadline, so it does not promise a fixed physical increment.
+The owner could raise the footrest with the wired controller in the failed HA
+state, and HA raise worked after Home completed fully. The new Home handoff is
+a candidate based on these observations; its physical effectiveness and the
+firmware reason remain unverified. Footrest pulse and wake timing are unchanged.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc7.zip` and replace
+1. Extract `svago-home-assistant-1.1.0rc8.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready**. Check that diagnostics report
-   `1.1.0rc7` and that **Return to neutral** appears under **Configuration**.
+   `1.1.0rc8` and that **Return to neutral** appears under **Configuration**.
 
 The default-enabled **Wired controller (estimated)** sensor appears under
 **Diagnostics**. It starts Unknown after a restart or reconnect, estimates On
@@ -36,20 +46,27 @@ one saved Memory button after Ready. Existing automations are not changed
 automatically. The action cannot save and does not update the button's
 last-pressed timestamp; see [automation guidance](AUTOMATIONS.md).
 
-## Check first-press recall reliability
+## Check Home and the following control
 
-1. Use **Return to neutral** and let it finish.
-2. Press **Memory 3** once, using its existing saved position away from neutral.
-   Observe whether that first press wakes the controller and moves the chair to
-   the saved position. This candidate waits for a fresh report after a 0.25-second
-   pause. With normal feedback cadence, the wait may take about 0.3 seconds; its
+1. From a comfortable position away from neutral, use **Return to neutral**.
+   While it is travelling, choose **Footrest raise** once. Home should complete
+   first, then the waiting footrest adjustment should run. You do not need to
+   wait manually before choosing the next control.
+2. Start away from neutral again and repeat with **Memory 3**, using its existing
+   saved position away from neutral.
+   Observe whether it waits for Home, then wakes the controller and recalls the
+   saved position from that one press. This candidate waits for a fresh report
+   after a 0.25-second pause. With normal feedback cadence, the wait may take
+   about 0.3 seconds; its
    default maximum is 3.25 seconds after the wake acknowledgment. The saved
    target is sent once.
-3. Optionally repeat Home followed by one press of another memory that already
-   contains a position away from neutral. Memory 1's saved neutral pose does not
-   test travel away from Home. Leave the saved slots unchanged.
-4. Optionally, from a position with room to move, press a direction button once.
-   Check that it makes a short adjustment and stops. If no forward position
+3. Start away from neutral again. While another Home is travelling, choose two
+   different follow-up controls. Only the last choice should run after Home
+   completes. Leave saved slots unchanged; a saved neutral memory does not test
+   travel away from Home.
+4. Optionally, from a position with room to move, press a backrest direction
+   button once. Check the adjustment and that it stops; rc8's normal pulse is
+   0.1 seconds, but it does not set a fixed physical step. If no forward position
    report arrives during the normal pulse, directional startup waiting allows up to
    two seconds; repeating presses cannot extend that no-progress deadline.
 
@@ -58,9 +75,12 @@ press only woke the wired controller and the second recalled the position.
 Waiting after Home did not prevent that behavior. The owner then confirmed rc3
 works. The settling period starts after the first press's wake acknowledgment.
 Later reports describe intermittent recall despite the wired controller waking.
-The latest rc6 diagnostics record Memory 1 after Home with an approximately
+Earlier rc6 diagnostics record Memory 1 after Home with an approximately
 0.301-second settling interval. The owner is revising the Memory 3/Memory 1 toggle
 automation as a possible contributor; its role is unconfirmed.
+The new Home handoff still needs on-chair verification. Repeating Home keeps the
+current Home and clears a waiting choice; Home failure or connection loss also
+discards the waiting action. It is not replayed after reconnecting.
 The quarter-second interval is armed after HA's Home command; physical controller
 or remote Off does not itself arm it. That startup path remains unresolved.
 Reliable first-press recall still needs confirmation. If a first
@@ -79,7 +99,9 @@ below remain available if more detailed behavior needs to be recorded.
    whether the wired controller switches off. Home Assistant should remain
    connected. The request finishes after two seconds of fresh neutral feedback.
 3. From another comfortable posture, repeat and press **Stop movement** during
-   travel. Confirm that it stops, then use normal controls again.
+   travel after choosing a follow-up. Confirm that Home stops and the waiting
+   control never runs. A new explicit control is allowed afterward; reliability
+   after interrupted Home remains unverified.
 4. Check one Home return with heat and massage running, including Continuous if
    normally used. Both functions should stop, with Continuous choices retained
    and renewal inactive. Nothing should resume without an explicit start.

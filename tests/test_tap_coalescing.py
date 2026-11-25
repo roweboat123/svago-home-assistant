@@ -26,8 +26,9 @@ def report_one_step_per_burst(chair, reported_bursts):
 class GatedPulse:
     """Pause each poll; report one useful step per burst without hitting a bound."""
 
-    def __init__(self, chair):
+    def __init__(self, chair, *, pause_after=0.1):
         self.chair = chair
+        self.pause_after = pause_after
         self.ticks = asyncio.Queue()
         self.permits = asyncio.Queue()
         self.free = False
@@ -38,11 +39,14 @@ class GatedPulse:
         chair.controller._sleep = self.sleep
 
     async def sleep(self, seconds):
-        self.chair.time += seconds
+        finished = self.chair.time + seconds
+        first_part = min(seconds, self.pause_after)
+        self.chair.time += first_part
         report_one_step_per_burst(self.chair, self.reported_bursts)
         self.ticks.put_nowait(self.chair.time)
         if not self.free:
             await self.permits.get()
+        self.chair.time = max(self.chair.time, finished)
         await asyncio.sleep(0)
 
     async def tick(self):
@@ -64,22 +68,24 @@ def stops(chair):
     return [packet for packet in chair.writes if packet[13:17] == b"\x80" * 4]
 
 
-@pytest.mark.parametrize("index,pulse", [(0, 0.5), (1, 0.25), (2, 0.25), (3, 0.5)])
+@pytest.mark.parametrize("index,pulse", [(0, 0.5), (1, 0.1), (2, 0.25), (3, 0.5)])
 async def test_same_direction_extends_one_gesture_without_extra_activation_or_stop(
     chair, index, pulse
 ):
-    gate = GatedPulse(chair)
+    # Join while the first poll is pending, before the shortest pulse expires.
+    joined_at = min(0.1, pulse / 2)
+    gate = GatedPulse(chair, pause_after=joined_at)
     owner = asyncio.create_task(chair.controller.step_position(index, 1))
-    assert await gate.tick() == pytest.approx(0.1)
+    assert await gate.tick() == pytest.approx(joined_at)
     joined = asyncio.create_task(chair.controller.step_position(index, 1))
     await asyncio.sleep(0)
-    assert chair.controller._tap_session["deadline"] == pytest.approx(0.1 + pulse)
+    assert chair.controller._tap_session["deadline"] == pytest.approx(joined_at + pulse)
     assert len(chair.writes) == 2  # One activation and one direction so far.
     assert not stops(chair)
     assert not joined.done()
     gate.finish()
     assert await asyncio.gather(owner, joined) == [None, None]
-    assert chair.time == pytest.approx(0.1 + pulse)
+    assert chair.time == pytest.approx(joined_at + pulse)
     assert len([p for p in chair.writes if p[5] == 0x11]) == 1
     assert len(stops(chair)) == 1
     assert chair.controller._tap_session is None
