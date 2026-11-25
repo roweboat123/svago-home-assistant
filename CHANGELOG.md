@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0rc1 — 2026-11-24
+
+Testing candidate adding the native **Return to neutral** button.
+
+- Send the exact captured Home command once, without activation, a memory-slot
+  recall or an intentional Bluetooth disconnect. The owner verified this command
+  returns the chair home with the phone still connected.
+- Stop active Continuous heat and massage renewal while preserving saved choices.
+- Require fresh feedback confirming neutral reported positions and comfort
+  functions Off. Retain Stop, replacement, stale-feedback and timeout handling.
+- Export the latest Home request in diagnostics. The new Home Assistant button
+  still needs on-chair validation; see [the testing guide](docs/HOME-TEST.md).
+
 ## 1.0.2 — 2026-11-24
 
 Fix issues found and tested during internal testing.

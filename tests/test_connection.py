@@ -152,7 +152,7 @@ async def test_diagnostics_retains_exact_frames_after_disconnect_without_writing
         None, SimpleNamespace(runtime_data=connection)
     )
     assert endpoint.write_gatt_char.await_count == before
-    assert result["version"] == "1.0.2"
+    assert result["version"] == "1.1.0rc1"
     assert result["last_status_hex"] == TV_STATUS.hex().upper()
     assert result["connected"] is False
     assert any(
@@ -167,6 +167,20 @@ async def test_diagnostic_history_has_a_fixed_memory_bound(transport):
     for _ in range(200):
         connection._record("test_event")
     assert len(connection.diagnostics()["history"]) == 64
+    endpoint.write_gatt_char.assert_not_awaited()
+    await connection.close()
+
+
+async def test_home_diagnostics_are_read_only_and_detached(transport):
+    connection, endpoint, _ = transport
+    await connection.start(monitor=False)
+    connection.controller.last_home_request = {
+        "outcome": "reported_neutral",
+        "reports": [{"positions": [0, 0, 0, 0]}],
+    }
+    result = connection.diagnostics()["last_home_request"]
+    result["reports"][0]["positions"][0] = 10
+    assert connection.controller.last_home_request["reports"][0]["positions"] == [0, 0, 0, 0]
     endpoint.write_gatt_char.assert_not_awaited()
     await connection.close()
 
@@ -201,7 +215,7 @@ async def test_diagnostics_before_setup_has_no_connection_side_effects():
     from custom_components.svago.diagnostics import async_get_config_entry_diagnostics
 
     assert await async_get_config_entry_diagnostics(None, SimpleNamespace()) == {
-        "version": "1.0.2",
+        "version": "1.1.0rc1",
         "connection_initialized": False,
     }
 

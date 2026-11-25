@@ -218,6 +218,7 @@ class Connection:
             ),
             "heat": status.heat if status else None,
             "last_activation": deepcopy(self.controller.last_activation),
+            "last_home_request": deepcopy(self.controller.last_home_request),
             "last_heat_request": (
                 dict(self.controller.last_heat_request)
                 if self.controller.last_heat_request

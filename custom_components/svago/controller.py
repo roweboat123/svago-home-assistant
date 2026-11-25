@@ -15,6 +15,7 @@ from .protocol import (
     CONTINUOUS_MASSAGE_MINUTES,
     HEAT_LEVELS,
     HEAT_ZONES,
+    HOME_COMMAND,
     MASSAGE_MODES,
     OBSERVED_BOUNDS,
     POSITION_NAMES,
@@ -42,6 +43,9 @@ MEMORY_STABLE_SECONDS = 2.0
 MEMORY_MAX_SECONDS = 60.0
 MEMORY_STALL_SECONDS = 3.0
 MEMORY_POLL_SECONDS = 0.1
+HOME_MAX_SECONDS = 60.0
+HOME_STABLE_SECONDS = 2.0
+HOME_POLL_SECONDS = 0.1
 MASSAGE_RENEW_SECONDS = 2400.0
 MASSAGE_DEFER_SECONDS = 1.0
 HEAT_RENEW_SECONDS = 10500.0
@@ -109,6 +113,8 @@ class Controller:
         self.status: Status | None = None
         self.last_heat_request: dict | None = None
         self.last_activation: dict | None = None
+        self.last_home_request: dict | None = None
+        self._home_session: dict | None = None
         self.setting_requests: deque[dict] = deque(maxlen=5)
         self.position_requests: deque[dict] = deque(maxlen=4)
         self.tap_requests: deque[dict] = deque(maxlen=4)
@@ -298,6 +304,7 @@ class Controller:
         self._request_id += 1
         self._intent_sequence += 1
         self._needs_stop = False
+        self._home_session = None
         self.connected = connected
         self.status = None
         self._received_at = float("-inf")
@@ -324,6 +331,7 @@ class Controller:
         self._status_sequence += 1
         self._received_at = now
         self._updated.set()
+        self._observe_home_status(status, now)
         if self._massage_running or self._massage_starting:
             if (
                 status.timer_minutes("massage") != CONTINUOUS_MASSAGE_MINUTES
@@ -503,6 +511,150 @@ class Controller:
     async def turn_on(self) -> None:
         async with self._serialized_operation() as generation:
             await self._activate(generation, "turn_on")
+
+    def _observe_home_status(self, status: Status, received_at: float) -> None:
+        """Track every Home report, including brief changes between monitor polls."""
+        session = self._home_session
+        if session is None or session["generation"] != self._generation:
+            return
+        trace = session["trace"]
+        trace["status_reports"] += 1
+        raw = status.raw.hex().upper()
+        reports = trace["reports"]
+        if not reports or reports[-1]["status_hex"] != raw:
+            reports.append(
+                {
+                    "seconds": round(received_at - session["started"], 3),
+                    "positions": list(status.positions),
+                    "heat": status.heat,
+                    "massage": status.massage,
+                    "status_hex": raw,
+                }
+            )
+            del reports[:-64]
+        if not self._home_positions_valid(status):
+            session["invalid_positions"] = True
+        neutral = (
+            status.positions == (0, 0, 0, 0) and status.heat is False and status.massage == "Off"
+        )
+        if not neutral:
+            session["neutral_since"] = None
+            session["neutral_reports"] = 0
+        elif (
+            session["neutral_since"] is None
+            or received_at - session["last_report_at"] > self._stale_after
+        ):
+            session["neutral_since"] = received_at
+            session["neutral_reports"] = 1
+        else:
+            session["neutral_reports"] += 1
+        session["last_report_at"] = received_at
+        trace["neutral_stable_seconds"] = (
+            round(received_at - session["neutral_since"], 3)
+            if session["neutral_since"] is not None
+            else 0.0
+        )
+
+    @staticmethod
+    def _home_positions_valid(status: Status) -> bool:
+        return all(
+            lower <= position <= upper
+            for position, (lower, upper) in zip(status.positions, OBSERVED_BOUNDS, strict=True)
+        )
+
+    async def return_home(self) -> None:
+        """Send native Home once and observe stable neutral motor/heat/massage feedback.
+
+        This does not infer lumbar pressure or controller power from positions.
+        Native travel can be staged and briefly move away from zero.
+        """
+        trace = {
+            "outcome": "pending",
+            "command_hex": HOME_COMMAND.hex().upper(),
+            "status_reports": 0,
+            "neutral_stable_seconds": 0.0,
+            "reports": [],
+        }
+        self.last_home_request = trace
+        requested_at = self._clock()
+        session = None
+        try:
+            async with self._operation() as generation:
+                status = self._current(generation)
+                if not self._home_positions_valid(status):
+                    raise ControlError("Current position is outside the observed range.")
+                trace["status_before_hex"] = status.raw.hex().upper()
+                trace["positions_before"] = list(status.positions)
+                # Retire renewals at dispatch, preserving the remembered choices
+                # just as an explicit Heat/Massage Off does. No new session starts.
+                self._stop_massage_session("home_requested")
+                self._stop_heat_session("home_requested")
+                started = self._clock()
+                session = {
+                    "generation": generation,
+                    "started": started,
+                    "trace": trace,
+                    "last_report_at": float("-inf"),
+                    "neutral_since": None,
+                    "neutral_reports": 0,
+                    "invalid_positions": False,
+                }
+                self._home_session = session
+                # Delivery may succeed even if the transport later raises.
+                self._needs_stop = True
+                try:
+                    async with asyncio.timeout(HOME_MAX_SECONDS):
+                        await self._write_packet(HOME_COMMAND)
+                        # Home can match the pre-command state. Reports while a
+                        # transport write is pending do not prove it was sent;
+                        # start the full observation window after it returns.
+                        # Keep any invalid bounds seen during that write.
+                        session["neutral_since"] = None
+                        session["neutral_reports"] = 0
+                        session["last_report_at"] = float("-inf")
+                        trace["neutral_stable_seconds"] = 0.0
+                        trace["outcome"] = "waiting_for_reported_neutral"
+                        while True:
+                            self._current(generation)
+                            if session["invalid_positions"]:
+                                raise ControlError(
+                                    "Unexpected Home position feedback; a movement stop was attempted."
+                                )
+                            if self._clock() - started >= HOME_MAX_SECONDS:
+                                raise TimeoutError
+                            if (
+                                session["neutral_reports"] >= 2
+                                and session["last_report_at"] - session["neutral_since"]
+                                >= HOME_STABLE_SECONDS
+                            ):
+                                break
+                            await self._sleep(HOME_POLL_SECONDS)
+                except BaseException as exc:
+                    await self._best_effort_release(generation, motors=(0x80,) * 4)
+                    if isinstance(exc, TimeoutError):
+                        raise ControlError(
+                            "Home did not report stable neutral positions with heat and massage Off "
+                            "within the time limit; a movement stop was attempted."
+                        ) from exc
+                    raise
+                self._needs_stop = False
+                trace["outcome"] = "reported_neutral"
+        except CommandSuperseded:
+            trace["outcome"] = "replaced_by_new_request"
+            raise
+        except asyncio.CancelledError:
+            trace["outcome"] = "cancelled"
+            raise
+        except Exception as exc:
+            trace["outcome"] = "failed"
+            trace["error"] = str(exc)
+            raise
+        finally:
+            if self._home_session is session:
+                self._home_session = None
+            trace["duration_seconds"] = round(self._clock() - requested_at, 3)
+            trace["positions_after"] = list(self.status.positions) if self.status else None
+            trace["status_after_hex"] = self.status.raw.hex().upper() if self.status else None
 
     async def select_preset(self, name: str) -> None:
         """Select a captured native program once; firmware owns its travel.

@@ -1,4 +1,4 @@
-# Validation — Svago 1.0.2
+# Validation — Svago 1.1.0rc1
 
 ## Scope
 
@@ -8,18 +8,23 @@ checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
 Local validation passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**999 tests** on each, plus Ruff lint and formatting (60 Python files).
-Five dependency deprecation warnings remain on each version. The 23 added cases
-cover memory-data preservation, unsent recalls retaining Continuous sessions,
-fresh heat/massage acknowledgments, elapsed lumbar deadlines and release failure
-handoffs. Additional legacy-profile assertions check that saving another slot
-does not rewrite the untouched profile. Reproduce these checks with
+**1,033 tests** on each, plus Ruff lint and formatting.
+Five dependency deprecation warnings remain on each version. The 34 added cases
+cover the exact native Home frame, captured nonmonotonic travel, fresh feedback
+after write completion, stable neutral detection, interruption, reconnects,
+Continuous session handling, independent button availability and detached
+diagnostics. Existing tests retain coverage for memory-data preservation, fresh
+comfort acknowledgments and elapsed lumbar deadlines. Reproduce these checks with
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The owner reported completing internal testing of the fixes supplied for 1.0.2.
-The release retains those runtime changes; review added regression coverage and
-updated documentation. The side dial's native return-to-neutral command remains
-unidentified and is not included in this release.
+This is a testing candidate. The exact native Home packet was captured from the
+remote and then replayed independently from a phone. The owner confirmed that
+the chair returned home to neutral, with Bluetooth status notifications
+continuing afterward. The new Home Assistant button still requires an on-chair
+test before a stable release; see [the Home test guide](docs/HOME-TEST.md).
+
+The owner previously reported completing internal testing of the fixes supplied
+for stable 1.0.2. This candidate retains those fixes.
 
 The owner confirmed seamless reconnection on the affected chair with `1.0.1rc1`
 after reporting the missing-FFF0 setup error following power loss. Version 1.0.2
@@ -35,6 +40,16 @@ empty-memory setup are also checked during release preparation.
 
 ## Physical evidence
 
+- The native remote-Off/Home packet returned the chair from reported positions
+  0/0/4/6 to all zero in approximately 6.75 seconds during independent phone
+  replay. The log contains 329 valid status frames and continued notifications
+  after arrival, without a disconnect. Brief movement away from zero occurred
+  during the sequence and is allowed by the Home monitor.
+- Heat and massage were already Off during that replay. Their On-to-Off
+  transitions still need testing through the new HA button. The owner confirmed
+  that holding the side dial and switching the remote Off also return home and
+  turn the wired controller Off; controller power is not independently observable
+  in the captured status fields.
 - The owner confirmed seamless reconnection with the power-cycle recovery fix.
   No manual integration reload was needed in the reported successful test.
 - Movement, lumbar, heat on/off and massage controls were exercised on the chair.
@@ -133,10 +148,13 @@ that single uncached attempt; cancellation or unload prevents another connection
 Diagnostics retain the cache-clear result and missing-service error. Persistent
 failure returns to the existing setup or reconnect retry mechanism.
 
-## Release checks still required
+## Remaining physical and release checks
 
-1. Install the packaged version on the development chair and check Continuous
+1. Install this candidate and test Return to neutral, wired-controller shutdown,
+   active heat/massage shutdown and Stop during Home travel using the
+   [Home test guide](docs/HOME-TEST.md).
+2. Check Continuous
    status changes and a saved-memory recall with Continuous selected.
-2. Observe the longer renewal schedules and combined heat/massage behavior.
-3. Run the configured GitHub validation workflows after publishing the repository.
-4. Create a full GitHub release before requesting inclusion in the shared catalog.
+3. Observe the longer renewal schedules and combined heat/massage behavior.
+4. Require successful configured GitHub validation workflows for the exact source
+   revision before publishing a stable release.

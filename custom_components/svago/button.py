@@ -1,4 +1,4 @@
-"""Directional presses, lumbar adjustments and captured chair presets."""
+"""Directional presses, lumbar adjustments and native chair programs."""
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
@@ -27,6 +27,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         [
             *(SvagoButton(connection, *item) for item in BUTTONS),
             *(PresetButton(connection, *item) for item in PRESET_BUTTONS),
+            HomeButton(connection),
             *(MemoryButton(connection, slot) for slot in range(1, 4)),
         ]
     )
@@ -67,6 +68,18 @@ class PresetButton(SvagoEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.execute(self.controller.select_preset(self._preset))
+
+
+class HomeButton(SvagoEntity, ButtonEntity):
+    """Invoke the captured native shutdown/Home operation."""
+
+    _attr_icon = "mdi:seat"
+
+    def __init__(self, connection):
+        super().__init__(connection, "return_home", "Return to neutral")
+
+    async def async_press(self) -> None:
+        await self.execute(self.controller.return_home())
 
 
 class MemoryButton(SvagoEntity, ButtonEntity):

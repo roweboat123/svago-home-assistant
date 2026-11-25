@@ -28,6 +28,12 @@ PRESET_COMMANDS = {
     "zgr": bytes.fromhex("7E020100100003842A300100008F8F8F8F0200010100010000367E"),
     "lay_flat": bytes.fromhex("7E020100100003842A300200008F8F8F8F0200010100010000377E"),
 }
+# Exact native remote-Off/Home invocation captured before remote disconnection.
+# Replaying this frame alone was physically verified to return to neutral while
+# BLE stayed connected. Field 5 and byte 17 belong to this native operation;
+# do not normalize byte 17 through the ordinary massage-mode command mapping.
+# The captured invocation also includes timer resets and Low/Off/Low heat zones.
+HOME_COMMAND = bytes.fromhex("7E0201001001000100000000000000000001000201000100001A7E")
 POSITION_NAMES = ("headrest", "backrest", "seat", "footrest")
 # Limits of the observed data, NOT calibrated mechanical endpoints.
 # ZGR reports seat 40; Lay flat reports backrest 22. These are valid position

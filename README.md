@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.0.2**.
+Version **1.1.0rc1** — testing candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,15 +9,17 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.0.2
+## What's new in 1.1.0rc1
 
-This release includes fixes found during internal testing:
+Add **Return to neutral**, using the chair's captured native Home command.
+The owner verified that the exact command returns the chair home while Bluetooth
+stays connected. The new Home Assistant button is ready for on-chair testing;
+see the [testing guide](docs/HOME-TEST.md).
 
-- Saving one memory preserves unreadable or newer-format data in other slots.
-- Heat and massage commands wait for fresh matching chair feedback.
-- Failed memory recalls preserve existing Continuous sessions until a target is sent.
-- Lumbar adjustments count Bluetooth delays toward their three-second limit, with
-  release and Stop handling when delivery is interrupted.
+The button sends the native command once and waits for fresh feedback showing
+all four reported positions at zero with heat and massage Off. It stops active
+Continuous renewal and keeps the saved Continuous choices for the next explicit
+start. It does not use or overwrite a saved memory slot.
 
 ## Install and connect
 
@@ -58,6 +60,7 @@ Replace the `custom_components/svago` folder and restart Home Assistant. Keep yo
 | Massage | Off, Gentle, Relax, Stretch, Wave or Vigorous |
 | Massage timer | 15, 30, 45 minutes or Continuous |
 | ZGR / Lay flat | Apply the captured native program |
+| Return to neutral | Run the native Home operation and stop Continuous renewal |
 | Memory 1–3 | Recall a saved Home Assistant profile, or save while Set memory is on |
 | Set memory | Arm one memory save |
 | Turn on | Wake the chair's controller without toggling it off |
@@ -80,6 +83,12 @@ Lumbar has no established position feedback, so it remains buttons.
 **ZGR and Lay flat also select Relax massage and heat with their captured timer
 and zone settings.** They are full chair programs, not movement-only buttons.
 They apply finite timers and exit Continuous.
+
+**Return to neutral** uses the same native operation captured when powering off
+the Bluetooth remote. The exact invocation includes timer resets and heat-zone
+selections of backrest Low, seat Off and footrest Low, with master heat Off.
+Reported neutral positions do not independently measure controller power or
+lumbar pressure. Other controls and **Stop movement** can interrupt the request.
 
 ## Continuous heat and massage
 

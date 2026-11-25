@@ -18,15 +18,16 @@ def connection_stub():
     return SimpleNamespace(controller=controller, address=ADDRESS)
 
 
-async def test_setup_retains_existing_button_identities_and_adds_presets_and_memories():
+async def test_setup_retains_existing_button_identities_and_adds_presets_home_and_memories():
     connection = connection_stub()
     add_entities = Mock()
     await async_setup_entry(None, SimpleNamespace(runtime_data=connection), add_entities)
     entities = add_entities.call_args.args[0]
-    assert len(entities) == len(BUTTONS) + 5
+    assert len(entities) == len(BUTTONS) + 6
     assert all(isinstance(entity, ButtonEntity) for entity in entities)
     expected = {f"{ADDRESS}_{key}": name for key, name, _, _ in BUTTONS}
     expected.update({f"{ADDRESS}_preset_zgr": "ZGR", f"{ADDRESS}_preset_lay_flat": "Lay flat"})
+    expected[f"{ADDRESS}_return_home"] = "Return to neutral"
     for slot in range(1, 4):
         expected[f"{ADDRESS}_memory_{slot}"] = f"Memory {slot}"
     assert {entity.unique_id: entity.name for entity in entities} == expected
