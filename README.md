@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc6** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc7** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,16 +9,23 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc6
+## What's new in 1.1.0rc7
 
-This candidate shortens the pause
-after the first wake following Return to neutral to **0.25 seconds**. It still
-requires a fresh report after the pause, so the wait may take about 0.3 seconds
+- Add **Recall saved memory** (`svago.recall_memory`) for automations. It recalls
+  exactly one Memory button and never saves; it is blocked while Set memory is
+  armed or a save is in progress. Existing automations are not changed automatically.
+- Preserve Continuous heat and massage sessions when a preset fails before its
+  write begins. Renewal stops when the preset write begins.
+- If a slider's final stop write fails, require a stop
+  before the next control on that connection.
+
+The pause after the first wake following Return to neutral remains **0.25 seconds**.
+It still requires a fresh report after the pause, so the wait may take about 0.3 seconds
 with normal feedback cadence. The default maximum is 3.25 seconds after the wake
-acknowledgment, and the requested action is sent once. The quarter-second timing
-still needs confirmation on the chair. Intermittent first-press memory recall
-after Home remains under investigation; the owner will check the automation
-internally.
+acknowledgment, and the requested action is sent once. The interval was observed
+in rc6 diagnostics, but reliable first-press memory recall after Home still needs
+confirmation. The owner is revising the toggle automation; its role remains
+unconfirmed.
 
 **Wired controller (estimated)** appears under Diagnostics and is enabled by
 default. It estimates On or Off from successful Home Assistant wake and Return
@@ -171,6 +178,11 @@ with the Bluetooth remote's memory slots.
 While Set memory is on, other user controls are disabled. Turn it off to cancel.
 Saving requires fresh position feedback stable for two seconds and sends no chair
 command. Controls unlock after the save completes or fails.
+
+For automations, use **Recall saved memory** with exactly one Memory button
+entity. Ordinary Memory button presses still save when Set memory is armed.
+Existing `button.press` automations require an explicit change to the new action;
+see [automation guidance](docs/AUTOMATIONS.md).
 
 Profiles include positions, heat state/levels, massage mode, finite durations and
 each function's Continuous choice. Recalling a profile restores those choices;

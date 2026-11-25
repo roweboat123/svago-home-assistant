@@ -77,12 +77,31 @@ async def test_slider_reverse_feedback_stops(chair):
     assert chair.writes[-1][13:17] == b"\x80" * 4
 
 
-async def test_slider_normal_release_failure_surfaces(chair):
+@pytest.mark.parametrize("reconnect", [False, True])
+async def test_slider_final_stop_failure_requires_handoff_only_on_same_link(chair, reconnect):
     chair.fail_at = 5  # Activation, three direction commands, then release.
     with pytest.raises(ControlError, match="not retried"):
         await chair.controller.set_position(0, 8)
     assert len(chair.writes) == 5
     assert chair.writes[-1][13:17] == b"\x80" * 4
+    if reconnect:
+        chair.controller.set_connected(False)
+        chair.controller.set_connected(True)
+        chair.controller.accept_status(status_with())
+        assert len(chair.writes) == 5  # No replay on reconnect.
+    else:
+        # Failed handoff sends only a Stop, never a wake or a direction.
+        chair.fail_at = 6
+        with pytest.raises(ControlError, match="not retried"):
+            await chair.controller.step_position(1, 1)
+        assert len(chair.writes) == 6 and chair.writes[-1][13:17] == b"\x80" * 4
+    start = len(chair.writes)
+    await chair.controller.step_position(1, 1)
+    if not reconnect:
+        assert chair.writes[start][13:17] == b"\x80" * 4
+        start += 1
+    assert chair.writes[start][5] == 0x11
+    assert chair.writes[start + 1][14] == 0x82
 
 
 async def test_slider_stale_feedback_prevents_further_writes(chair):

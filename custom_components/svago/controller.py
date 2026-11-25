@@ -789,8 +789,6 @@ class Controller:
             payload = preset_command(name)
         except ValueError as exc:
             raise ControlError(str(exc)) from exc
-        self._stop_massage_session("preset_selected", clear_selection=True)
-        self._stop_heat_session("preset_selected", clear_selection=True)
         trace = {"preset": name, "outcome": "pending"}
         self.preset_requests.append(trace)
         try:
@@ -803,6 +801,10 @@ class Controller:
                 # Keep a stop pending until the next successful handoff as well.
                 self._needs_stop = True
                 try:
+                    # An unsent preset cannot replace the running timers. Once the
+                    # write starts, delivery may be uncertain even if it raises.
+                    self._stop_massage_session("preset_selected", clear_selection=True)
+                    self._stop_heat_session("preset_selected", clear_selection=True)
                     await self._write_packet(payload)
                     trace["outcome"] = "waiting_for_status"
                     await self._wait_for(
@@ -2125,7 +2127,7 @@ class Controller:
                 if isinstance(exc, TimeoutError):
                     raise ControlError("Movement time limit reached; movement stopped.") from exc
                 raise
-            await self._send(generation, motors=(0x80,) * 4)
+            await self._release(generation, motors=(0x80,) * 4)
 
     async def cancel_active(self) -> None:
         self._stop_massage_session("shutdown")

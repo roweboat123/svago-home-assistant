@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc6
+# Validation — Svago 1.1.0rc7
 
 ## Scope
 
@@ -7,9 +7,11 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Local validation of 1.1.0rc6 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**1,115 tests** on each, plus Ruff lint and formatting.
-Five dependency deprecation warnings remain on each version. Coverage includes
+Local validation of 1.1.0rc7 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+**1,138 tests** on each, plus Ruff lint and formatting.
+Five dependency deprecation warnings remain on each version. New checks exercise
+recall-only targeting and request ordering, failures before preset writes, and
+uncertain final slider-stop delivery. Existing coverage includes
 the estimated controller state, its diagnostic sensor and export, uncertainty
 after interrupted feedback or commands, and passive feedback without power
 inference. It also covers bounded directional startup, fresh feedback after the
@@ -28,10 +30,16 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc6 retains Return to neutral under Configuration and the removal of
+Version 1.1.0rc7 retains Return to neutral under Configuration and the removal of
 the standalone Turn on button. Home's entity identity, native command and completion
 checks are unchanged. This remains a release candidate; 1.0.2 is the latest
 stable release.
+
+This candidate adds a recall-only action for a single Memory button, preserves
+Continuous sessions when a preset fails before its write, and retains the stop
+requirement when a slider's final release delivery is uncertain. The new action
+does not enter the save path, and existing automations are not converted to it.
+The manual archive now includes its YAML action metadata.
 
 The new **Wired controller (estimated)** diagnostic sensor is enabled by default.
 It estimates On after a successful HA wake and Off after successful HA Return to
@@ -64,9 +72,11 @@ The wake command and dependent memory target each remain single sends. Normal
 actions without a preceding Home retain their timing; Home, reconnects and passive
 status never start a wake on their own. The owner initially reported that rc5
 worked as intended, then reported intermittent Home-to-Memory-3 recall: the wired
-controller wakes, but recall occasionally does not start. First-press reliability
-remains under investigation, and the owner will check the automation internally.
-The cause is unverified; the quarter-second rc6 timing still needs an on-chair check.
+controller wakes, but recall occasionally does not start. The latest diagnostics
+were produced with rc6 installed: the recorded action was Memory 1 after Home,
+with a post-wake settling interval of approximately 0.301 seconds. The owner is
+revising the Memory 3/Memory 1 toggle automation as a possible contributor.
+Its role is unconfirmed, and reliable first-press recall still needs verification.
 
 The owner previously reported completing internal testing of the fixes supplied
 for stable 1.0.2. This candidate retains those fixes.
@@ -103,8 +113,9 @@ empty-memory setup are also checked during release preparation.
   Half-second headrest and footrest button bursts previously improved movement
   with shorter taps. Later diagnostics showed a half-second footrest press
   without forward feedback while slider movement worked. The owner subsequently
-  confirmed that rc3 works. The later intermittent rc5 recall report is recorded
-  above; the quarter-second rc6 wake interval remains untested on the chair.
+  confirmed that rc3 works. Later rc6 diagnostics recorded a 0.301-second
+  post-wake interval before Memory 1; reliable first-press recall remains under
+  investigation as described above.
 - The idempotent activation command turns the wired controller on when needed;
   repeating it does not toggle it off.
 - Status notifications reflect changes made with the physical controls. A
@@ -172,6 +183,12 @@ buttons select the destination and disarm saving afterward. Stop and replacement
 requests retain cancellation and ordering checks. Newer memory requests supersede
 older pending requests.
 
+The `svago.recall_memory` action accepts exactly one Memory button entity and
+rejects saving, ambiguous targets and other button types. Re-arming Set memory
+during storage lookup invalidates an older recall. Its integration activity is
+recorded as Recall, but it does not update HA's button last-pressed timestamp;
+neither record proves physical movement.
+
 Same-direction taps join an active burst, with a three-second maximum from the
 start of that burst. Without forward progress, the normal pulse can extend only
 until the first forward report or the two-second startup deadline. Joined
@@ -206,9 +223,12 @@ failure returns to the existing setup or reconnect retry mechanism.
 
 ## Recorded limits and release checks
 
-The shorter quarter-second wake interval needs an on-chair check of first-press
-recall after Home. The [candidate guide](docs/HOME-TEST.md) gives that focused
+Reliable first-press recall after Home still needs confirmation with the revised
+automation. The [candidate guide](docs/HOME-TEST.md) gives that focused
 check; unrelated long Continuous timing tests are not part of this check.
+That extra settling interval is armed by a Home command from HA. Physical
+controller or remote Off is not detected and does not itself arm the interval;
+startup reliability through that path remains unresolved.
 
 The successful HA Home test does not separately establish each interruption or
 comfort-function case. The [Home guide](docs/HOME-TEST.md) retains optional checks

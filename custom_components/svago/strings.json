@@ -13,5 +13,11 @@
       "cannot_connect": "{error_detail}"
     },
     "abort": {"already_configured": "This chair is already configured."}
+  },
+  "services": {
+    "recall_memory": {
+      "name": "Recall saved memory",
+      "description": "Recall exactly one Memory 1, 2, or 3 button. This action never saves a memory and is blocked while setting one."
+    }
   }
 }

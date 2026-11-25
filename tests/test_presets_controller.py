@@ -65,6 +65,38 @@ async def test_preset_requires_activation_acknowledgment(chair):
     assert chair.controller.preset_requests[-1]["outcome"] == "failed"
 
 
+@pytest.mark.parametrize("name", ["zgr", "lay_flat"])
+@pytest.mark.parametrize("failure", ["wake_write", "wake_ack", "target_write"])
+async def test_native_preset_retires_continuous_only_at_target_dispatch(chair, name, failure):
+    controller = chair.controller
+    await controller.set_massage_continuous()
+    await controller.set_massage("Gentle")
+    await controller.set_heat_continuous()
+    try:
+        heat, massage = controller._heat_renewal_task, controller._massage_renewal_task
+        assert heat is not None and massage is not None
+        start = len(chair.writes)
+        if failure == "wake_ack":
+            chair.activation_feedback = False
+        else:
+            chair.fail_at = start + (1 if failure == "wake_write" else 2)
+        with pytest.raises(ControlError):
+            await controller.select_preset(name)
+        sent = failure == "target_write"
+        assert chair.writes[start:].count(PRESET_COMMANDS[name]) == int(sent)
+        for kind in ("heat", "massage"):
+            assert controller.timer_preferences[kind] is not sent
+            assert getattr(controller, f"{kind}_renewal_diagnostics")["active"] is not sent
+        if sent:
+            assert chair.writes[-1][13:17] == b"\x80" * 4
+            assert controller._heat_renewal_task is controller._massage_renewal_task is None
+        else:
+            assert controller._heat_renewal_task is heat and not heat.cancelling()
+            assert controller._massage_renewal_task is massage and not massage.cancelling()
+    finally:
+        await controller.cancel_active()
+
+
 async def test_cached_matching_preset_is_not_new_confirmation(chair):
     chair.controller.accept_status(reply(PRESET_COMMANDS["zgr"]))
     chair.feedback = False

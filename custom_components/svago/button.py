@@ -3,6 +3,7 @@
 from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
 
+from .const import SUPPORT_RECALL_MEMORY
 from .entity import SvagoEntity
 
 PARALLEL_UPDATES = 0  # The controller coordinates replacements; Stop stays callable.
@@ -76,6 +77,7 @@ class HomeButton(SvagoEntity, ButtonEntity):
 class MemoryButton(SvagoEntity, ButtonEntity):
     _attr_icon = "mdi:seat"
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_supported_features = SUPPORT_RECALL_MEMORY
 
     def __init__(self, connection, slot: int):
         super().__init__(connection, f"memory_{slot}", f"Memory {slot}")
@@ -99,3 +101,7 @@ class MemoryButton(SvagoEntity, ButtonEntity):
             self.connection.press_memory(self._slot, save_intent=save_intent),
             request="Save" if save_intent else "Recall",
         )
+
+    async def async_recall_only(self) -> None:
+        """Recall this slot without ever entering the dual-purpose press/save path."""
+        await self.execute(self.connection.recall_memory(self._slot), request="Recall")

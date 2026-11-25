@@ -73,7 +73,7 @@ jobs:
                   raise SystemExit("Use a release tag matching the manifest version exactly")
           files = sorted(
               path for path in root.rglob("*")
-              if path.is_file() and path.suffix in {".py", ".json", ".png"}
+              if path.is_file() and path.suffix in {".py", ".json", ".png", ".yaml", ".yml"}
               and "__pycache__" not in path.parts
           )
           files += [

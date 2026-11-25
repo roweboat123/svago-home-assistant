@@ -1,22 +1,22 @@
-# Home and startup candidate checks — 1.1.0rc6
+# Home and startup candidate checks — 1.1.0rc7
 
 The chair's exact native Home command was captured from Bluetooth remote
 power-off and successfully replayed from a phone without disconnecting. The owner
 then confirmed that **Return to neutral** worked in Home Assistant with 1.1.0rc1.
-Version 1.1.0rc6 retains that button under **Configuration**, with the same entity
-identity and behavior. Its new 0.25-second pause needs an on-chair check.
-Intermittent first-press recall after Home remains under investigation.
+Version 1.1.0rc7 retains that button under **Configuration**, with the same entity
+identity and behavior. The retained quarter-second pause was observed in rc6
+diagnostics; reliable first-press recall after Home still needs confirmation.
 Version 1.0.2 remains the stable release.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc6.zip` and replace
+1. Extract `svago-home-assistant-1.1.0rc7.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready**. Check that diagnostics report
-   `1.1.0rc6` and that **Return to neutral** appears under **Configuration**.
+   `1.1.0rc7` and that **Return to neutral** appears under **Configuration**.
 
 The default-enabled **Wired controller (estimated)** sensor appears under
 **Diagnostics**. It starts Unknown after a restart or reconnect, estimates On
@@ -28,10 +28,15 @@ not change control behavior.
 
 The standalone Turn on button is removed. Movement buttons and sliders, lumbar,
 preset, memory-recall, Heat On and non-Off massage actions activate the controller
-automatically. The shorter wake interval needs an on-chair check; Home's native
-command and completion checks are unchanged.
+automatically. Reliable first-press recall still needs confirmation; Home's
+native command and completion checks are unchanged.
 
-## Check the quarter-second wake interval
+For the internal automation check, use `svago.recall_memory` targeting exactly
+one saved Memory button after Ready. Existing automations are not changed
+automatically. The action cannot save and does not update the button's
+last-pressed timestamp; see [automation guidance](AUTOMATIONS.md).
+
+## Check first-press recall reliability
 
 1. Use **Return to neutral** and let it finish.
 2. Press **Memory 3** once, using its existing saved position away from neutral.
@@ -52,9 +57,13 @@ Before rc3, the owner confirmed in a direct Home-to-Memory-3 check that the firs
 press only woke the wired controller and the second recalled the position.
 Waiting after Home did not prevent that behavior. The owner then confirmed rc3
 works. The settling period starts after the first press's wake acknowledgment.
-The latest rc5 report describes intermittent recall despite the wired controller
-waking; the owner will check the automation internally. The cause is unverified.
-The new quarter-second interval still needs physical confirmation. If a first
+Later reports describe intermittent recall despite the wired controller waking.
+The latest rc6 diagnostics record Memory 1 after Home with an approximately
+0.301-second settling interval. The owner is revising the Memory 3/Memory 1 toggle
+automation as a possible contributor; its role is unconfirmed.
+The quarter-second interval is armed after HA's Home command; physical controller
+or remote Off does not itself arm it. That startup path remains unresolved.
+Reliable first-press recall still needs confirmation. If a first
 press fails or movement differs from the expected result, download diagnostics
 immediately and describe what moved and whether the controller woke. No long
 Continuous-timer run is needed here.

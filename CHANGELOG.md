@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0rc7 — 2026-11-24
+
+- Add `svago.recall_memory` for exactly one Memory button. It can only recall,
+  blocks while Set memory is armed or saving, and preserves newer-request ordering.
+  Ordinary Memory buttons retain their save/recall behavior; existing automations
+  are not migrated automatically.
+- Preserve Continuous heat and massage sessions when a preset fails before its
+  write begins; retire renewal when preset delivery is attempted.
+- Preserve the required stop before the next control if a slider's final release
+  delivery is uncertain on the same connection.
+- Include the action's YAML metadata in the manual-install archive.
+
+The quarter-second post-Home wake pause and estimated controller sensor are
+unchanged. First-press recall reliability remains under investigation; this
+candidate does not establish a fix for wake behavior after physical controller Off.
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc6 — 2026-11-24
 
 - Shorten the pause after the first wake following Home to 0.25 seconds.

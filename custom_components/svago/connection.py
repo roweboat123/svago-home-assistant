@@ -351,8 +351,10 @@ class Connection:
             raise ControlError(f"Could not save Memory {slot}. Try again.") from exc
 
     async def recall_memory(self, slot: int) -> None:
+        if self.controls_locked:
+            raise ControlError("Finish or cancel Set memory before recalling a preset.")
         # Reserve the user's movement intent before any disk wait. A later Stop,
-        # control or reconnect must prevent this older request starting afterward.
+        # save arm, control or reconnect prevents this older request starting afterward.
         request = self.controller.reserve_memory_recall()
         memories = await self._loaded_memories()
         try:

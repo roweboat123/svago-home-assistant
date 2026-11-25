@@ -1,0 +1,5 @@
+recall_memory:
+  target:
+    entity:
+      domain: button
+      integration: svago
