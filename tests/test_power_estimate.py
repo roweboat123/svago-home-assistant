@@ -90,7 +90,7 @@ async def test_post_home_wake_stays_unknown_until_settling_finishes(power_chair)
     started = chair.time
     await chair.controller.turn_on()
 
-    assert 1 <= chair.time - started <= 1.2
+    assert 0.25 <= chair.time - started <= 0.45
     assert during and all(state is None for state in during)
     assert power(chair)["state"] == "On"
 

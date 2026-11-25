@@ -48,7 +48,7 @@ HOME_STABLE_SECONDS = 2.0
 HOME_POLL_SECONDS = 0.1
 # A foreground wake after native Home needs time for the controller to settle.
 # This bounded interval is a test candidate, not a decoded readiness flag.
-POST_HOME_WAKE_SECONDS = 1.0
+POST_HOME_WAKE_SECONDS = 0.25
 POST_HOME_WAKE_POLL_SECONDS = 0.1
 MASSAGE_RENEW_SECONDS = 2400.0
 MASSAGE_DEFER_SECONDS = 1.0

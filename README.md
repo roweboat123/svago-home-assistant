@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc5** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc6** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,18 +9,21 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc5
+## What's new in 1.1.0rc6
+
+This candidate shortens the pause
+after the first wake following Return to neutral to **0.25 seconds**. It still
+requires a fresh report after the pause, so the wait may take about 0.3 seconds
+with normal feedback cadence. The default maximum is 3.25 seconds after the wake
+acknowledgment, and the requested action is sent once. The quarter-second timing
+still needs confirmation on the chair. Intermittent first-press memory recall
+after Home remains under investigation; the owner will check the automation
+internally.
 
 **Wired controller (estimated)** appears under Diagnostics and is enabled by
 default. It estimates On or Off from successful Home Assistant wake and Return
 to neutral actions, and starts Unknown. It does not measure controller power;
 physical controls or the Bluetooth remote can make the estimate wrong.
-
-The owner confirmed that 1.1.0rc3 works. This candidate retains rc4's one-second
-settling interval after the first wake following Return to neutral. It still
-requires fresh feedback, with a four-second maximum after the wake acknowledgment,
-and sends the requested action once. The shorter interval still needs confirmation
-on the chair.
 
 The standalone **Turn on** button is removed; actions that need the controller
 awake activate it automatically. **Return to neutral** appears in **Configuration**

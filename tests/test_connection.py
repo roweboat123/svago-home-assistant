@@ -152,7 +152,7 @@ async def test_diagnostics_retains_exact_frames_after_disconnect_without_writing
         None, SimpleNamespace(runtime_data=connection)
     )
     assert endpoint.write_gatt_char.await_count == before
-    assert result["version"] == "1.1.0rc5"
+    assert result["version"] == "1.1.0rc6"
     assert result["last_status_hex"] == TV_STATUS.hex().upper()
     assert result["connected"] is False
     assert any(
@@ -215,7 +215,7 @@ async def test_diagnostics_before_setup_has_no_connection_side_effects():
     from custom_components.svago.diagnostics import async_get_config_entry_diagnostics
 
     assert await async_get_config_entry_diagnostics(None, SimpleNamespace()) == {
-        "version": "1.1.0rc5",
+        "version": "1.1.0rc6",
         "connection_initialized": False,
     }
 

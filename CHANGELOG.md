@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0rc6 — 2026-11-24
+
+- Shorten the pause after the first wake following Home to 0.25 seconds.
+  Require fresh feedback after that interval; normal feedback cadence may make
+  the wait about 0.3 seconds, with a default maximum of 3.25 seconds. The shorter
+  interval remains a candidate pending an on-chair check.
+- Retain the two-second Home neutral and directional startup limits, three-second
+  directional burst cap, memory behavior and estimated controller sensor.
+- First-press memory recall after Home remains intermittently unreliable in the
+  owner's report. The owner will check the automation internally; the cause and
+  effect of the shorter pause remain unverified.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc5 — 2026-11-24
 
 - Add the default-enabled **Wired controller (estimated)** diagnostic sensor.
