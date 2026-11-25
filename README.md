@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.1.0rc4** — release candidate. Latest stable release: **1.0.2**.
+Version **1.1.0rc5** — release candidate. Latest stable release: **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,13 +9,18 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.1.0rc4
+## What's new in 1.1.0rc5
 
-The owner confirmed that 1.1.0rc3 works. This candidate shortens the settling
-interval after the first wake following Return to neutral from two seconds to
-one. It still requires fresh feedback, with a four-second maximum after the wake
-acknowledgment, and sends the requested action once. The shorter interval still
-needs confirmation on the chair.
+**Wired controller (estimated)** appears under Diagnostics and is enabled by
+default. It estimates On or Off from successful Home Assistant wake and Return
+to neutral actions, and starts Unknown. It does not measure controller power;
+physical controls or the Bluetooth remote can make the estimate wrong.
+
+The owner confirmed that 1.1.0rc3 works. This candidate retains rc4's one-second
+settling interval after the first wake following Return to neutral. It still
+requires fresh feedback, with a four-second maximum after the wake acknowledgment,
+and sends the requested action once. The shorter interval still needs confirmation
+on the chair.
 
 The standalone **Turn on** button is removed; actions that need the controller
 awake activate it automatically. **Return to neutral** appears in **Configuration**
@@ -104,7 +109,8 @@ They apply finite timers and exit Continuous.
 the Bluetooth remote. The exact invocation includes timer resets and heat-zone
 selections of backrest Low, seat Off and footrest Low, with master heat Off.
 Reported neutral positions do not independently measure controller power or
-lumbar pressure. Other controls and **Stop movement** can interrupt the request.
+lumbar pressure. The diagnostic controller state is an estimate based on HA
+actions. Other controls and **Stop movement** can interrupt the request.
 
 ## Continuous heat and massage
 
@@ -183,6 +189,19 @@ unsupported structure, saving is blocked to protect the original data.
 **Connection status → Ready** requires a live Bluetooth connection, notifications,
 fresh usable chair status and capacity for the full command. It does not prove
 that a motor moved. Controls become unavailable when this path is not ready.
+
+**Wired controller (estimated)** records an estimate from HA actions:
+
+| Estimate | Basis |
+| --- | --- |
+| On | A successful Home Assistant wake |
+| Off | A successfully completed Home Assistant Return to neutral |
+| Unknown | Connection not ready, restart/reconnect, lost or unusable status, or a wake/Home action in progress or incomplete |
+
+The estimate is not restored after restarting. No actual controller-power field
+has been verified, and physical controls or the Bluetooth remote can change the
+controller without a detectable update to this estimate. It does not control
+availability, skip wake commands or alter command timing.
 
 - **After power returns:** the integration reconnects automatically. Keep the Motion
   Mastery Bluetooth remote off and wait for **Ready** before using the controls.

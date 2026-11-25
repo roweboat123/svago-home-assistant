@@ -19,6 +19,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             LastResponseSensor(connection),
             LastActionSensor(connection),
             LastProblemSensor(connection),
+            WiredControllerEstimatedSensor(connection),
             ContinuousStatusSensor(connection, "heat"),
             ContinuousStatusSensor(connection, "massage"),
             *(PositionSensor(connection, index, name) for index, name in enumerate(POSITION_NAMES)),
@@ -76,6 +77,26 @@ class LastResponseSensor(DiagnosticSensor):
     @property
     def native_value(self):
         return self.connection.last_status_received
+
+
+class WiredControllerEstimatedSensor(DiagnosticSensor):
+    """Label the last HA power intent explicitly as an estimate."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["On", "Off"]
+    _attr_icon = "mdi:power"
+
+    def __init__(self, connection):
+        super().__init__(connection, "wired_controller_estimated", "Wired controller (estimated)")
+
+    @property
+    def native_value(self):
+        return self.connection.wired_controller_power_estimate["state"]
+
+    @property
+    def extra_state_attributes(self):
+        snapshot = self.connection.wired_controller_power_estimate
+        return {key: snapshot[key] for key in ("estimated", "basis", "physical_controls_observed")}
 
 
 class LastActionSensor(DiagnosticSensor):

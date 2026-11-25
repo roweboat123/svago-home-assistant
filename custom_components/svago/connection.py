@@ -134,6 +134,15 @@ class Connection:
         """Last usable chair reply, retained so a disconnected chair has a last-seen time."""
         return self._last_status_received
 
+    @property
+    def wired_controller_power_estimate(self) -> dict:
+        """Expose command-derived power consistently in the UI and diagnostic export."""
+        snapshot = dict(self.controller.wired_controller_power_estimate)
+        if not self.controls_ready:
+            snapshot["state"] = None
+            snapshot["basis"] = "Connection is not ready"
+        return snapshot
+
     def health_snapshot(self) -> dict:
         """Current health and durable transport history; no Bluetooth commands."""
         return {
@@ -194,6 +203,7 @@ class Connection:
             "connected": self.bluetooth_connected,
             "available": self.controls_ready,
             "connection_health": self.health_snapshot(),
+            "wired_controller_power_estimate": self.wired_controller_power_estimate,
             "service_discovery": {
                 "cache_recovery_attempts": self._service_cache_recoveries,
                 "last_cache_clear": self._last_cache_clear,

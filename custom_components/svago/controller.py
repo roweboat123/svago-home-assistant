@@ -118,6 +118,8 @@ class Controller:
         self.last_heat_request: dict | None = None
         self.last_activation: dict | None = None
         self.last_home_request: dict | None = None
+        self._wired_controller_power: str | None = None
+        self._wired_controller_power_basis = "No completed HA wake or Return to neutral command"
         self._home_session: dict | None = None
         self._home_wake_pending = False
         self._home_wake_epoch = 0
@@ -158,6 +160,34 @@ class Controller:
             and self.status.usable
             and self._clock() - self._received_at <= self._stale_after
         )
+
+    @property
+    def wired_controller_power_estimate(self) -> dict:
+        """Describe HA's command-based estimate, never measured controller power.
+
+        Physical controls can change the wired controller without any decoded
+        Bluetooth power feedback. This estimate must not gate control commands.
+        """
+        available = self.available
+        return {
+            "state": self._wired_controller_power if available else None,
+            "estimated": True,
+            "basis": (
+                self._wired_controller_power_basis if available else "Chair feedback unavailable"
+            ),
+            "physical_controls_observed": False,
+        }
+
+    def _set_wired_controller_power_estimate(
+        self, state: str | None, basis: str, *, generation: int | None = None, notify=True
+    ) -> None:
+        if generation is not None and generation != self._generation:
+            return
+        before = self.wired_controller_power_estimate
+        self._wired_controller_power = state
+        self._wired_controller_power_basis = basis
+        if notify and self.wired_controller_power_estimate != before:
+            self._changed()
 
     @property
     def status_age_seconds(self) -> float | None:
@@ -314,6 +344,9 @@ class Controller:
         self.connected = connected
         self.status = None
         self._received_at = float("-inf")
+        self._set_wired_controller_power_estimate(
+            None, "Bluetooth connection changed", notify=False
+        )
         self._reset_position_stability()
         self._updated.set()
         self._changed()
@@ -323,6 +356,9 @@ class Controller:
             return
         was_savable = self.can_save_memory
         changed = not self.available or self.status != status
+        power_feedback_interrupted = self._wired_controller_power is not None and (
+            not self.available or not status.usable
+        )
         now = self._clock()
         if (
             self._stable_positions != status.positions
@@ -336,6 +372,12 @@ class Controller:
         self.status = status
         self._status_sequence += 1
         self._received_at = now
+        if power_feedback_interrupted:
+            # Resuming notifications cannot restore an estimate made before a
+            # stale gap or unusable feedback. A new HA wake/Home must complete.
+            self._set_wired_controller_power_estimate(
+                None, "Chair feedback unavailable", notify=False
+            )
         self._updated.set()
         self._observe_home_status(status, now)
         self._observe_tap_feedback(status, now)
@@ -361,7 +403,7 @@ class Controller:
                     self._stop_heat_session("chair_stopped")
             elif self._heat_starting:
                 self._heat_starting_active = True
-        if changed or was_savable != self.can_save_memory:
+        if changed or power_feedback_interrupted or was_savable != self.can_save_memory:
             self._changed()
 
     def snapshot_memory(self) -> MemoryProfile:
@@ -494,6 +536,9 @@ class Controller:
                 raise ControlError(str(exc)) from exc
             trace["command_hex"] = payload.hex().upper()
             sequence = self._status_sequence
+            self._set_wired_controller_power_estimate(
+                None, "HA wake command in progress or incomplete", generation=generation
+            )
             await self._write_packet(payload)
             trace["outcome"] = "waiting_for_response"
             await self._wait_for(
@@ -508,7 +553,11 @@ class Controller:
             if wake_epoch is not None:
                 trace["outcome"] = "waiting_after_home"
                 await self._settle_after_home(generation, wake_epoch, trace)
+            self._current(generation)
             trace["outcome"] = "acknowledged"
+            self._set_wired_controller_power_estimate(
+                "On", "HA wake command acknowledged", generation=generation
+            )
         except asyncio.CancelledError:
             trace["outcome"] = "cancelled"
             raise
@@ -627,7 +676,8 @@ class Controller:
     async def return_home(self) -> None:
         """Send native Home once and observe stable neutral motor/heat/massage feedback.
 
-        This does not infer lumbar pressure or controller power from positions.
+        Positions do not verify lumbar pressure or controller power. Successful
+        completion separately records a command-based controller-power estimate.
         Native travel can be staged and briefly move away from zero.
         """
         trace = {
@@ -666,6 +716,11 @@ class Controller:
                 self._home_wake_epoch += 1
                 self._home_wake_pending = True
                 self._needs_stop = True
+                self._set_wired_controller_power_estimate(
+                    None,
+                    "HA Return to neutral command in progress or incomplete",
+                    generation=generation,
+                )
                 try:
                     async with asyncio.timeout(HOME_MAX_SECONDS):
                         await self._write_packet(HOME_COMMAND)
@@ -703,6 +758,9 @@ class Controller:
                     raise
                 self._needs_stop = False
                 trace["outcome"] = "reported_neutral"
+                self._set_wired_controller_power_estimate(
+                    "Off", "HA Return to neutral completed", generation=generation
+                )
         except CommandSuperseded:
             trace["outcome"] = "replaced_by_new_request"
             raise

@@ -1,4 +1,4 @@
-# Validation — Svago 1.1.0rc4
+# Validation — Svago 1.1.0rc5
 
 ## Scope
 
@@ -7,10 +7,13 @@ chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
-Local validation of 1.1.0rc4 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**1,079 tests** on each, plus Ruff lint and formatting.
+Local validation of 1.1.0rc5 passed on both Home Assistant **2026.10.0** and **2026.11.2**:
+**1,115 tests** on each, plus Ruff lint and formatting.
 Five dependency deprecation warnings remain on each version. Coverage includes
-bounded directional startup, fresh feedback after the post-Home wake interval,
+the estimated controller state, its diagnostic sensor and export, uncertainty
+after interrupted feedback or commands, and passive feedback without power
+inference. It also covers bounded directional startup, fresh feedback after the
+post-Home wake interval,
 interruption and reconnect handling, removal of the standalone Turn on entity,
 and the readiness-only automation example with its guarded caller. Existing
 tests retain the exact native Home frame, captured nonmonotonic travel, stable
@@ -25,10 +28,20 @@ the chair returned home to neutral, with Bluetooth status notifications
 continuing afterward. The owner subsequently confirmed that the Home Assistant
 button worked in 1.1.0rc1.
 
-Version 1.1.0rc4 retains Return to neutral under Configuration and the removal of
+Version 1.1.0rc5 retains Return to neutral under Configuration and the removal of
 the standalone Turn on button. Home's entity identity, native command and completion
 checks are unchanged. This remains a release candidate; 1.0.2 is the latest
 stable release.
+
+The new **Wired controller (estimated)** diagnostic sensor is enabled by default.
+It estimates On after a successful HA wake and Off after successful HA Return to
+neutral completion. It starts Unknown and shows Unknown when the connection is
+not ready, after restart/reconnect or lost/unusable status, and while wake/Home
+is in progress or incomplete. The estimate is not persisted and does not gate
+actions, skip activation or change packets or timing. No actual power feedback
+has been decoded; physical controls and the
+Bluetooth remote can make this action-based estimate wrong without detectable
+feedback.
 
 The new directional-startup handling addresses diagnostics where a half-second
 footrest press showed no forward position feedback while a slider moved using
@@ -50,7 +63,7 @@ three-second stale-feedback limit gives a four-second total bound on this wait.
 The wake command and dependent memory target each remain single sends. Normal
 actions without a preceding Home retain their timing; Home, reconnects and passive
 status never start a wake on their own. The owner confirmed rc3 works with its
-two-second interval. Version 1.1.0rc4 shortens only this interval to one second;
+two-second interval. Version 1.1.0rc5 retains rc4's one-second interval;
 the shorter timing still needs an on-chair check.
 
 The owner previously reported completing internal testing of the fixes supplied

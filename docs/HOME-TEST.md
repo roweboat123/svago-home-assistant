@@ -1,28 +1,36 @@
-# Home and startup candidate checks — 1.1.0rc4
+# Home and startup candidate checks — 1.1.0rc5
 
 The chair's exact native Home command was captured from Bluetooth remote
 power-off and successfully replayed from a phone without disconnecting. The owner
 then confirmed that **Return to neutral** worked in Home Assistant with 1.1.0rc1.
-Version 1.1.0rc4 retains that button under **Configuration**, with the same entity
-identity and behavior. The owner confirmed that rc3 works; rc4 shortens the
-post-wake settling interval to one second. Version 1.0.2 remains the stable release.
+Version 1.1.0rc5 retains that button under **Configuration**, with the same entity
+identity and behavior. The owner confirmed that rc3 works; rc5 retains rc4's
+one-second post-wake interval. Version 1.0.2 remains the stable release.
 
 ## Install
 
-1. Extract `svago-home-assistant-1.1.0rc4.zip` and replace
+1. Extract `svago-home-assistant-1.1.0rc5.zip` and replace
    `/config/custom_components/svago` with the archive's `custom_components/svago`
    folder. Keep the existing integration entry and Home Assistant storage.
 2. Restart Home Assistant. Disconnect nRF Connect and keep the Bluetooth remote
    off so Home Assistant can connect.
 3. Wait for **Connection status → Ready**. Check that diagnostics report
-   `1.1.0rc4` and that **Return to neutral** appears under **Configuration**.
+   `1.1.0rc5` and that **Return to neutral** appears under **Configuration**.
+
+The default-enabled **Wired controller (estimated)** sensor appears under
+**Diagnostics**. It starts Unknown after a restart or reconnect, estimates On
+after a successful HA wake, and estimates Off after a successful HA Return to
+neutral. It shows Unknown when not ready, with lost or unusable status, and while
+wake/Home is in progress or incomplete. Physical controls or the Bluetooth
+remote can make the estimate wrong; it is not measured power feedback and does
+not change control behavior.
 
 The standalone Turn on button is removed. Movement buttons and sliders, lumbar,
 preset, memory-recall, Heat On and non-Off massage actions activate the controller
 automatically. The shorter wake interval needs an on-chair check; Home's native
 command and completion checks are unchanged.
 
-## Check the shorter rc4 wake interval
+## Check the retained one-second wake interval
 
 1. Use **Return to neutral** and let it finish.
 2. Press **Memory 3** once, using its existing saved position away from neutral.
@@ -41,8 +49,8 @@ command and completion checks are unchanged.
 Before rc3, the owner confirmed in a direct Home-to-Memory-3 check that the first
 press only woke the wired controller and the second recalled the position.
 Waiting after Home did not prevent that behavior. The owner then confirmed rc3
-works. The settling period starts after the first press's wake acknowledgment;
-rc4's shorter one-second interval still needs physical confirmation. If a first
+works. The settling period starts after the first press's wake acknowledgment.
+The retained one-second interval still needs physical confirmation. If a first
 press fails or movement differs from the expected result, download diagnostics
 immediately and describe what moved and whether the controller woke. No long
 Continuous-timer run is needed here.
@@ -67,7 +75,7 @@ The native invocation includes timer resets and heat-zone selections
 backrest Low, seat Off, footrest Low. It does not save or replace Home Assistant
 memory slots. A completed request confirms reported motor positions and comfort
 function state; controller power and lumbar pressure are not independently
-available as feedback.
+available as feedback. The estimated sensor does not establish either measurement.
 
 If any result differs, download Svago diagnostics immediately and describe the
 physical result. `last_home_request` records the command, feedback and outcome.

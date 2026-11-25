@@ -167,6 +167,7 @@ async def test_default_diagnostics_and_optional_last_response_stay_readable_offl
         "Connection status",
         "Last action",
         "Last problem",
+        "Wired controller (estimated)",
         "Heat continuous status",
         "Massage continuous status",
     }

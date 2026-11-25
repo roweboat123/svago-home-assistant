@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0rc5 — 2026-11-24
+
+- Add the default-enabled **Wired controller (estimated)** diagnostic sensor.
+  Estimate On after a successful HA wake and Off after successful HA Return to
+  neutral; show Unknown when not ready, after reconnect or unusable status, and
+  while wake/Home is in progress or incomplete. Do not restore it after restarting.
+- Keep the estimate separate from actual power feedback, which has not been
+  verified. Physical controls and the Bluetooth remote can make it inaccurate.
+  It does not gate actions, skip wake commands or change packets or timing.
+- Retain rc4's one-second wake interval; its physical timing check is still pending.
+
+Version 1.0.2 remains the latest stable release.
+
 ## 1.1.0rc4 — 2026-11-24
 
 - Record the owner's confirmation that 1.1.0rc3 works.
