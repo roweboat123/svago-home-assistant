@@ -203,11 +203,13 @@ async def test_heat_off_supersedes_heat_on_feedback_wait(chair):
     chair.controller.accept_status(status_with(heat=False))
     chair.feedback = False
 
-    def activation_response(payload):
+    def acknowledge_activation_or_off(payload):
         if payload[5] == 0x11:
             chair.controller.accept_status(status_with(heat=False, **{"5": 0x11}))
+        elif payload[13:17] == b"\xff" * 4 and payload[19] == 2:
+            chair.controller.accept_status(status_with(heat=False))
 
-    chair.on_write = activation_response
+    chair.on_write = acknowledge_activation_or_off
     pending_on = asyncio.create_task(entity.execute(chair.controller.set_heat(True)))
     await asyncio.sleep(0)
     await entity.execute(chair.controller.set_heat(False))

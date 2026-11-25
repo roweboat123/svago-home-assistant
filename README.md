@@ -1,7 +1,7 @@
 # Svago Motion Mastery for Home Assistant
 
 Local Bluetooth control for Svago Motion Mastery chair.
-Version **1.0.1**.
+Version **1.0.2**.
 
 A compatible HA Bluetooth adapter or active Bluetooth proxy must be within range.
 
@@ -9,12 +9,19 @@ This is an independent community integration, not an official Svago product.
 Support is based on the Motion Mastery protocol; compatibility with other Svago
 controllers or firmware has not been established.
 
-## What's new in 1.0.1
+## What's new in 1.0.2
 
-Improved automatic reconnection after the chair loses power. If required Bluetooth
-services or characteristics are missing, the integration retries with fresh service
-discovery once. Seamless reconnection after turning the chair's power off and back
-on was confirmed on the development chair.
+This release includes fixes found during internal testing:
+
+- Saving one memory preserves unreadable or newer-format data in other slots.
+- Heat and massage commands wait for fresh matching chair feedback.
+- Failed memory recalls preserve existing Continuous sessions until a target is sent.
+- Lumbar adjustments count Bluetooth delays toward their three-second limit, with
+  release and Stop handling when delivery is interrupted.
+
+The automatic reconnection fix from 1.0.1 is retained. The side dial's native
+return-to-neutral command has not been identified, so this release does not add
+that button.
 
 ## Install and connect
 
@@ -145,6 +152,10 @@ A newer memory selection replaces an older request; obsolete recalls do not queu
 to run later. The chair may need time to stop and acknowledge the new target.
 Stored profiles survive restarts and integration reloads. Deleting the integration
 entry also deletes its stored profiles and timer preferences.
+
+If a slot can't be read, saving another slot leaves it intact. Use **Set memory**
+on the unreadable slot to replace it deliberately. If the saved data has an
+unsupported structure, saving is blocked to protect the original data.
 
 ## Connection and troubleshooting
 

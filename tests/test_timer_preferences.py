@@ -14,6 +14,7 @@ from homeassistant.helpers.storage import Store
 from custom_components import svago
 from custom_components.svago.connection import Connection
 from custom_components.svago.controller import HEAT_RENEW_SECONDS, MASSAGE_RENEW_SECONDS
+from custom_components.svago.memory_protocol import MemoryProfile
 from custom_components.svago.preferences import TimerPreferences
 from custom_components.svago.protocol import CONTINUOUS_HEAT_MINUTES, CONTINUOUS_MASSAGE_MINUTES
 
@@ -343,7 +344,7 @@ async def test_memory_or_native_preset_keeps_its_finite_timers_authoritative(
     chair.controller.restore_timer_preferences({"heat": True, "massage": True})
     store.update(chair.controller.timer_preferences)
     if action == "memory":
-        chair.controller.reserve_memory_recall()
+        await chair.controller.recall_memory(1, MemoryProfile.from_status(status_with()))
     else:
         await chair.controller.select_preset("zgr")
         assert chair.controller.status.timer_minutes("massage") == 15

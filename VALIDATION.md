@@ -1,23 +1,29 @@
-# Validation — Svago 1.0.1
+# Validation — Svago 1.0.2
 
 ## Scope
 
-Prepared November 22, 2026. The integration was developed against a Motion Mastery
+Prepared November 24, 2026. The integration was developed against a Motion Mastery
 chair using captured Bluetooth traffic and physical command tests. Automated
 checks exercise Home Assistant behavior with simulated transport and feedback;
 they do not establish behavior on other chair models, firmware or adapters.
 
 Local validation passed on both Home Assistant **2026.10.0** and **2026.11.2**:
-**976 tests** on each, plus Ruff lint and formatting (60 Python files).
-Five dependency deprecation warnings remain on each version. The 13 added cases
-cover incomplete service recovery, cache errors/timeouts, cancellation and unload,
-replacement status waiting, fresh device lookup and automatic recovery without
-command replay. Storage and command behavior retain their existing checks.
-Reproduce these checks with [CONTRIBUTING.md](CONTRIBUTING.md).
+**999 tests** on each, plus Ruff lint and formatting (60 Python files).
+Five dependency deprecation warnings remain on each version. The 23 added cases
+cover memory-data preservation, unsent recalls retaining Continuous sessions,
+fresh heat/massage acknowledgments, elapsed lumbar deadlines and release failure
+handoffs. Additional legacy-profile assertions check that saving another slot
+does not rewrite the untouched profile. Reproduce these checks with
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+The owner reported completing internal testing of the fixes supplied for 1.0.2.
+The release retains those runtime changes; review added regression coverage and
+updated documentation. The side dial's native return-to-neutral command remains
+unidentified and is not included in this release.
 
 The owner confirmed seamless reconnection on the affected chair with `1.0.1rc1`
-after reporting the missing-FFF0 setup error following power loss. Version 1.0.1
-uses the same connection code. This validates recovery on that installation;
+after reporting the missing-FFF0 setup error following power loss. Version 1.0.2
+retains the connection code from 1.0.1. This validates recovery on that installation;
 incomplete cached services remain an inferred cause, not a captured backend
 diagnosis. See [the power-cycle recovery check](docs/RECONNECT-TEST.md).
 
@@ -89,7 +95,10 @@ Superseded recalls, disconnects, changed presets and Off reports cannot attach
 obsolete workers after a pending storage write.
 
 Fresh installations start with empty slots. Existing saved profiles and legacy
-migration markers are retained. Public code contains no chair-address-specific
+migration markers are retained. Saving one slot preserves unreadable or
+newer-format entries in other slots; only an explicitly selected slot is replaced.
+An unsupported overall saved structure blocks writes. Recalls that fail before
+target dispatch preserve existing Continuous sessions and choices. Public code contains no chair-address-specific
 profile imports or personal Bluetooth address defaults.
 
 Set memory requires fresh stationary feedback. Other user controls are unavailable

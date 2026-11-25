@@ -28,6 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 # nonresponsive 0.25 s presses. Backrest and seat retain their existing timing.
 MOTOR_PULSE_SECONDS = (0.5, 0.25, 0.25, 0.5)
 MOTOR_REPEAT_SECONDS = 0.1
+LUMBAR_BURST_SECONDS = 3.0
 # Repeated taps extend the current gesture, never a backlog of future travel.
 MOTOR_BURST_MAX_SECONDS = 3.0
 # Seat travel above 31 is now captured, including ZGR at 40. Allow a full
@@ -567,9 +568,19 @@ class Controller:
         finally:
             trace["status_after_hex"] = self.status.raw.hex().upper() if self.status else None
 
-    async def _best_effort_release(self, generation: int, *, motors=(0x8F,) * 4) -> None:
+    async def _release(self, generation: int, *, motors=(0x8F,) * 4) -> None:
         try:
             await self._send(generation, motors=motors, lumbar=0)
+        except BaseException:
+            # Delivery is uncertain. Require the existing stop handoff on the
+            # next request, but never carry a release across reconnection.
+            if generation == self._generation:
+                self._needs_stop = True
+            raise
+
+    async def _best_effort_release(self, generation: int, *, motors=(0x8F,) * 4) -> None:
+        try:
+            await self._release(generation, motors=motors)
         except Exception:
             _LOGGER.warning("Could not send the release with fresh state; no command was replayed")
 
@@ -584,14 +595,12 @@ class Controller:
         return positions
 
     def reserve_memory_recall(self) -> tuple[int, int]:
-        """Order a recall before storage I/O without touching ongoing movement.
+        """Order a recall before storage I/O without touching movement or timers.
 
         A later request, Stop or reconnect invalidates this reservation. Two
         pending recalls are ordered here, rather than by storage completion.
         """
         self._current(self._generation)
-        self._stop_massage_session("memory_selected", clear_selection=True)
-        self._stop_heat_session("memory_selected", clear_selection=True)
         self._request_id += 1
         self._intent_sequence += 1
         self._settings_epoch += 1
@@ -618,8 +627,6 @@ class Controller:
             profile.command(current, slot)
         except ValueError as exc:
             raise ControlError(str(exc)) from exc
-        self._stop_massage_session("memory_selected", clear_selection=True)
-        self._stop_heat_session("memory_selected", clear_selection=True)
         trace = {
             "slot": slot,
             "target_positions": list(profile.positions),
@@ -640,6 +647,13 @@ class Controller:
                     payload = profile.command(current, slot)
                 except ValueError as exc:
                     raise ControlError(str(exc)) from exc
+                if recall_intent != (self._request_id, self._intent_sequence):
+                    raise CommandSuperseded
+                # Only this write can replace the previous timers. Retire
+                # their workers before delivery becomes uncertain; publish the
+                # new choices together after the chair reaches the target.
+                self._stop_massage_session("memory_selected")
+                self._stop_heat_session("memory_selected")
                 trace["command_hex"] = payload.hex().upper()
                 sequence = self._status_sequence
                 started = self._clock()
@@ -877,6 +891,7 @@ class Controller:
                 if enabled:
                     await self._activate(generation, "heat_on")
                 status = self._current(generation)
+                sequence = self._status_sequence
                 trace["status_before_hex"] = status.raw.hex().upper()
                 if continuous:
                     if not self._can_renew_heat(status):
@@ -886,7 +901,10 @@ class Controller:
                         payload = status.command(motors=(0xFF,) * 4, heat=True)
                         trace["command_hex"] = payload.hex().upper()
                         await self._write_packet(payload)
-                        await self._wait_for(generation, lambda status: status.heat is True)
+                        await self._wait_for(
+                            generation,
+                            lambda status: self._status_sequence > sequence and status.heat is True,
+                        )
                     else:
                         trace["command_hex"] = status.continuous_heat_command().hex().upper()
                     await self._begin_continuous_heat(generation, session)
@@ -896,7 +914,10 @@ class Controller:
                     )
                     await self._send(generation, motors=(0xFF,) * 4, heat=enabled)
                     trace["outcome"] = "waiting_for_status"
-                    await self._wait_for(generation, lambda status: status.heat is enabled)
+                    await self._wait_for(
+                        generation,
+                        lambda status: self._status_sequence > sequence and status.heat is enabled,
+                    )
                 trace["outcome"] = "confirmed"
         except CommandSuperseded:
             trace["outcome"] = "replaced_by_new_request"
@@ -927,8 +948,12 @@ class Controller:
             if continuous:
                 await self._begin_continuous_massage(generation, session, mode)
             else:
+                sequence = self._status_sequence
                 await self._send(generation, motors=(0xFF,) * 4, massage=mode)
-                await self._wait_for(generation, lambda status: status.massage == mode)
+                await self._wait_for(
+                    generation,
+                    lambda status: self._status_sequence > sequence and status.massage == mode,
+                )
 
     async def set_massage_continuous(self) -> None:
         """Select Continuous, arming only an explicit future start when Off."""
@@ -1286,16 +1311,30 @@ class Controller:
     async def adjust_lumbar(self, inflate: bool) -> None:
         async with self._operation() as generation:
             await self._activate(generation, "lumbar")
+            deadline = self._clock() + LUMBAR_BURST_SECONDS
+            writing = False
             try:
-                for _ in range(30):
-                    await self._send(generation, lumbar=2 if inflate else 1)
-                    await self._sleep(0.1)
+                async with asyncio.timeout(LUMBAR_BURST_SECONDS):
+                    for _ in range(ceil(LUMBAR_BURST_SECONDS / MOTOR_REPEAT_SECONDS)):
+                        if self._clock() >= deadline:
+                            break
+                        writing = True
+                        await self._send(generation, lumbar=2 if inflate else 1)
+                        writing = False
+                        remaining = deadline - self._clock()
+                        if remaining <= 0:
+                            break
+                        await self._sleep(min(MOTOR_REPEAT_SECONDS, remaining))
+            except TimeoutError:
+                # Expiring during the final sleep is normal. An in-flight
+                # write has uncertain delivery and must not be reported as OK.
+                if writing:
+                    await self._best_effort_release(generation)
+                    raise ControlError("Lumbar write timed out; a release was attempted.") from None
             except BaseException:
                 await self._best_effort_release(generation)
                 raise
-            else:
-                # Surface a failed normal release instead of reporting success.
-                await self._send(generation, lumbar=0)
+            await self._release(generation)
 
     async def step_position(self, index: int, direction: int) -> str | None:
         """Start or extend one bounded gesture, ending at the observed bound."""

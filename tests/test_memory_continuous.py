@@ -167,8 +167,37 @@ async def test_supersession_while_persisting_never_starts_obsolete_workers(chair
     assert not chair.controller.massage_renewal_diagnostics["active"]
     assert len([p for p in chair.writes if is_memory_write(p)]) == 1
     if replacement == "recall":
-        assert chair.controller.timer_preferences == {"heat": False, "massage": False}
+        # A reservation prevents obsolete workers from starting, but it has
+        # not applied a new profile or changed the choices being persisted.
+        assert chair.controller.timer_preferences == {"heat": True, "massage": True}
     await chair.controller.cancel_active()
+
+
+@pytest.mark.parametrize("failure", ["activation", "superseded_before_target", "target_write"])
+async def test_only_dispatch_of_valid_recall_retires_existing_workers(chair, failure):
+    controller = chair.controller
+    await controller.recall_memory(1, saved_profile())
+    try:
+        before = len(chair.writes)
+        choices = []
+        controller._preferences_changed = choices.append
+        if failure == "superseded_before_target":
+            chair.on_write = lambda _: controller.reserve_memory_recall()
+            expected = CommandSuperseded
+        else:
+            chair.fail_at = before + (1 if failure == "activation" else 2)
+            expected = ControlError
+        target = saved_profile(massage_continuous=False, heat_continuous=False)
+        with pytest.raises(expected):
+            await controller.recall_memory(2, target, request=controller.reserve_memory_recall())
+        dispatched = failure == "target_write"
+        assert sum(is_memory_write(packet) for packet in chair.writes[before:]) == int(dispatched)
+        assert controller.massage_renewal_diagnostics["active"] is not dispatched
+        assert controller.heat_renewal_diagnostics["active"] is not dispatched
+        assert controller.timer_preferences == {"heat": True, "massage": True}
+        assert choices == []
+    finally:
+        await controller.cancel_active()
 
 
 async def test_failed_commit_leaves_no_workers_or_extra_ble_write(chair):

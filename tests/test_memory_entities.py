@@ -147,6 +147,32 @@ async def test_direct_recall_of_empty_slot_has_useful_error_and_no_controller_ac
     connection.controller.recall_memory.assert_not_awaited()
 
 
+@pytest.mark.parametrize("failure", ["unreadable", "empty", "invalid_profile"])
+async def test_unsent_recall_leaves_existing_continuous_sessions_running(chair, failure):
+    connection = ready_connection()
+    connection.controller = controller = chair.controller
+    await controller.set_massage_continuous()
+    await controller.set_massage("Gentle")
+    await controller.set_heat_continuous()
+    try:
+        changed = Mock()
+        controller._preferences_changed = changed
+        before = list(chair.writes)
+        connection.memories = SimpleNamespace(
+            async_load=AsyncMock(side_effect=OSError() if failure == "unreadable" else None),
+            get=Mock(return_value=object() if failure == "invalid_profile" else None),
+        )
+        with pytest.raises(ControlError):
+            await connection.recall_memory(2)
+        assert controller.heat_renewal_diagnostics["active"]
+        assert controller.massage_renewal_diagnostics["active"]
+        assert controller.timer_preferences == {"heat": True, "massage": True}
+        changed.assert_not_called()
+        assert chair.writes == before
+    finally:
+        await controller.cancel_active()
+
+
 async def test_connection_recall_uses_saved_profile_without_overwriting_it():
     connection = ready_connection()
     profile = object()

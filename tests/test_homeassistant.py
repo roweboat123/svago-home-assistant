@@ -132,7 +132,7 @@ async def test_real_ha_loader_discovers_integration_and_all_platforms(tmp_path):
     hass = HomeAssistant(str(tmp_path))
     loader.async_setup(hass)
     integration = await loader.async_get_integration(hass, "svago")
-    assert integration.version == "1.0.1"
+    assert integration.version == "1.0.2"
     assert integration.config_flow
     assert "svago" in await loader.async_get_config_flows(hass)
     await integration.async_get_component()

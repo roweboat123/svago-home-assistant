@@ -152,7 +152,7 @@ async def test_diagnostics_retains_exact_frames_after_disconnect_without_writing
         None, SimpleNamespace(runtime_data=connection)
     )
     assert endpoint.write_gatt_char.await_count == before
-    assert result["version"] == "1.0.1"
+    assert result["version"] == "1.0.2"
     assert result["last_status_hex"] == TV_STATUS.hex().upper()
     assert result["connected"] is False
     assert any(
@@ -175,12 +175,11 @@ async def test_heat_trace_survives_history_rollover_without_writes(transport):
     connection, endpoint, _ = transport
     await connection.start(monitor=False)
 
-    # Respond to activation; heat is already ON in the captured TV status.
-    async def acknowledge_activation(characteristic, payload, **kwargs):
-        if payload[5] == 0x11:
-            endpoint.callback(endpoint.notify, status_with(**{"5": 0x11}).raw)
+    # Heat is already on, but each write still needs its own fresh report.
+    async def report_after_write(characteristic, payload, **kwargs):
+        endpoint.callback(endpoint.notify, status_with(heat=True, **{"5": payload[5]}).raw)
 
-    endpoint.write_gatt_char.side_effect = acknowledge_activation
+    endpoint.write_gatt_char.side_effect = report_after_write
     await connection.controller.set_heat(True)
     for _ in range(100):
         connection._record("later_event")
@@ -202,7 +201,7 @@ async def test_diagnostics_before_setup_has_no_connection_side_effects():
     from custom_components.svago.diagnostics import async_get_config_entry_diagnostics
 
     assert await async_get_config_entry_diagnostics(None, SimpleNamespace()) == {
-        "version": "1.0.1",
+        "version": "1.0.2",
         "connection_initialized": False,
     }
 

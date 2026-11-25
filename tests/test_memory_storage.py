@@ -70,15 +70,42 @@ async def test_corrupt_slot_rejected_without_losing_other_valid_slots(memory_has
     await store.async_import_missing({2: profile(2), 3: profile(3)})
     assert store.get(2) is None and store.get(3) is None
     assert await read_disk(memory_hass) == original
-    # An explicit Memory Set is still allowed to recover validated profiles.
+    # An explicit save touches only the destination, including with unknown slot IDs.
     await store.async_save(3, profile(3))
+    assert (await read_disk(memory_hass))["profiles"] == original["profiles"] | {
+        "3": profile(3).to_dict()
+    }
+    await store.async_import_missing({2: profile(2)})
+    assert store.get(2) is None
+    assert (await read_disk(memory_hass))["profiles"]["2"] == invalid
+
+
+async def test_future_slot_survives_other_saves_until_explicitly_replaced(memory_hass):
+    future = profile(2).to_dict() | {"future_setting": {"values": [1, 2]}}
+    original = {"profiles": {"1": profile(1).to_dict(), "2": future}}
+    await Store(memory_hass, 1, "svago.memories.entry_a").async_save(original)
+    store = MemoryStore(memory_hass, "entry_a")
+    await store.async_load()
+    await store.async_save(1, profile(6))
+    await store.async_close()
+    reloaded = MemoryStore(memory_hass, "entry_a")
+    await reloaded.async_load()
+    assert reloaded.get(1) == profile(6) and reloaded.get(2) is None
+    await reloaded.async_restore_once(LEGACY_RESTORE_ID, {2: profile(3)})
+    assert (await read_disk(memory_hass))["profiles"] == {"1": profile(6).to_dict(), "2": future}
+    # Choosing that same slot deliberately repairs it and permits later imports.
+    await reloaded.async_save(2, profile(7))
+    await reloaded.async_import_missing({3: profile(3)})
     assert (await read_disk(memory_hass))["profiles"] == {
-        "1": profile(1).to_dict(),
+        "1": profile(6).to_dict(),
+        "2": profile(7).to_dict(),
         "3": profile(3).to_dict(),
     }
 
 
-@pytest.mark.parametrize("bad", ([], {"profiles": []}, {"unexpected": {}}))
+@pytest.mark.parametrize(
+    "bad", ([], {"profiles": []}, {"unexpected": {}}, {"profiles": {}, "v2": 1})
+)
 async def test_malformed_envelope_loads_no_profiles_and_does_not_rewrite(memory_hass, caplog, bad):
     await Store(memory_hass, 1, "svago.memories.entry_a").async_save(bad)
     store = MemoryStore(memory_hass, "entry_a")
@@ -87,6 +114,8 @@ async def test_malformed_envelope_loads_no_profiles_and_does_not_rewrite(memory_
     assert "Ignoring invalid saved Svago memory data" in caplog.text
     await store.async_import_missing({2: profile(2), 3: profile(3)})
     assert all(store.get(slot) is None for slot in (1, 2, 3))
+    with pytest.raises(HomeAssistantError, match="unrecognized format"):
+        await store.async_save(1, profile(1))
     assert await read_disk(memory_hass) == bad
 
 
@@ -458,6 +487,10 @@ async def test_restore_never_overwrites_malformed_storage(memory_hass, bad):
     persist = AsyncMock(wraps=store._persist)
     store._persist = persist
     await store.async_restore_once(LEGACY_RESTORE_ID, {3: LEGACY_PROFILES[3]})
+    if "applied_migrations" in bad:
+        assert store.get(3) == profile(3)
+        with pytest.raises(HomeAssistantError, match="unrecognized format"):
+            await store.async_save(1, profile(1))
     persist.assert_not_awaited()
     assert await read_disk(memory_hass) == bad
 
@@ -491,7 +524,11 @@ async def test_legacy_profile_load_defaults_finite_without_rewriting_file(memory
     assert not store.get(1).massage_continuous
     assert await read_disk(memory_hass) == original
     await store.async_save(2, profile(7))
-    assert (await read_disk(memory_hass))["applied_migrations"] == [LEGACY_RESTORE_ID]
+    # Saving another slot must not add newer fields to the untouched legacy slot.
+    assert await read_disk(memory_hass) == {
+        "profiles": {"1": legacy, "2": profile(7).to_dict()},
+        "applied_migrations": [LEGACY_RESTORE_ID],
+    }
 
 
 async def test_continuous_memory_choices_survive_storage_reload(memory_hass):

@@ -7,6 +7,7 @@ from conftest import status_with
 
 from custom_components.svago import controller as controller_module
 from custom_components.svago.controller import CommandSuperseded, ControlError
+from custom_components.svago.memory_protocol import MemoryProfile
 from custom_components.svago.protocol import MASSAGE_MODES, Status, checksum
 
 
@@ -252,7 +253,7 @@ async def test_overrides_and_lifecycle_clear_session(continuous_chair, action):
     if action == "preset":
         await chair.controller.select_preset("zgr")
     elif action == "memory":
-        chair.controller.reserve_memory_recall()
+        await chair.controller.recall_memory(1, MemoryProfile.from_status(status_with()))
     elif action == "finite":
         await chair.controller.set_timer("massage", 30)
     elif action == "disconnect":

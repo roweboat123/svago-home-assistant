@@ -38,6 +38,56 @@ async def test_heat_and_massage_changes_during_burst_including_release(chair):
     assert chair.writes[-1][17] == 2 and chair.writes[-1][10] == 0x13
 
 
+async def test_lumbar_release_deadline_counts_transport_latency(chair):
+    starts = []
+
+    def delay(packet):
+        if packet[18] == 2:
+            starts.append(chair.time)
+            chair.time += 0.1
+
+    chair.on_write = delay
+    await chair.controller.adjust_lumbar(True)
+    assert starts and max(starts) < 3
+    assert chair.time - starts[0] == pytest.approx(3)
+    assert chair.writes[-1][18] == 0
+
+
+async def test_lumbar_deadline_interrupts_blocked_write_and_attempts_release(chair, monkeypatch):
+    from custom_components.svago import controller
+
+    monkeypatch.setattr(controller, "LUMBAR_BURST_SECONDS", 0.02)
+    attempted = []
+
+    async def blocked(packet):
+        attempted.append(packet[18])
+        if packet[18] == 1:
+            await asyncio.Event().wait()
+        await chair.write(packet)
+
+    chair.controller._write = blocked
+    with pytest.raises(ControlError, match="Lumbar write timed out"):
+        await chair.controller.adjust_lumbar(False)
+    assert attempted == [0, 1, 0]  # activation, one attempted deflate, release
+
+
+async def test_lumbar_deadline_during_sleep_releases_once_and_completes(chair, monkeypatch):
+    from custom_components.svago import controller
+
+    monkeypatch.setattr(controller, "LUMBAR_BURST_SECONDS", 0.02)
+
+    async def blocked_sleep(_seconds):
+        await asyncio.Event().wait()
+
+    chair.controller._sleep = blocked_sleep
+    await asyncio.wait_for(chair.controller.adjust_lumbar(True), 1)
+
+    assert [packet[18] for packet in chair.writes] == [0, 2, 0]
+    assert chair.writes[0][5] == 0x11
+    assert chair.writes[-1][13:17] == b"\x8f" * 4
+    assert not chair.controller.busy
+
+
 @pytest.mark.parametrize("mode", MASSAGE_MODES)
 async def test_massage_selection_preserves_heat(chair, mode):
     chair.controller.accept_status(status_with(heat=False))
@@ -141,6 +191,66 @@ async def test_write_failure_attempts_release_but_does_not_retry_action(chair):
     assert not chair.controller.busy
 
 
+@pytest.mark.parametrize("fail_direction", [False, True])
+async def test_failed_lumbar_release_gates_next_movement(chair, fail_direction):
+    def fail(packet):
+        if packet[5] == 0 and (packet[18] == 0 or fail_direction):
+            raise OSError("simulated failure")
+
+    chair.on_write = fail
+    with pytest.raises(ControlError, match="not retried"):
+        await chair.controller.adjust_lumbar(True)
+    assert chair.writes[-1][13:17] == b"\x8f" * 4 and chair.writes[-1][18] == 0
+
+    # If even the handoff fails, no activation or new movement may slip through.
+    count = len(chair.writes)
+    with pytest.raises(ControlError, match="not retried"):
+        await chair.controller.step_position(0, 1)
+    assert len(chair.writes) == count + 1
+    assert chair.writes[count][13:17] == b"\x80" * 4 and chair.writes[count][18] == 0
+
+    chair.on_write = None
+    await chair.controller.step_position(0, 1)
+    assert chair.writes[count + 1] == chair.writes[count]
+    assert chair.writes[count + 2][5] == 0x11
+    assert chair.writes[count + 3][13] == 0x82
+
+
+async def test_cancelled_final_lumbar_release_requires_stop_before_next_movement(chair):
+    releasing = asyncio.Event()
+    attempted = []
+
+    async def block_final_release(packet):
+        attempted.append(packet)
+        if packet[5] == 0 and packet[18] == 0:
+            releasing.set()
+            await asyncio.Event().wait()
+        await chair.write(packet)
+
+    chair.controller._write = block_final_release
+    task = asyncio.create_task(chair.controller.adjust_lumbar(True))
+    try:
+        await asyncio.wait_for(releasing.wait(), 1)
+        assert attempted[-1][13:17] == b"\x8f" * 4
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not chair.controller.busy
+
+        chair.controller._write = chair.write
+        count = len(chair.writes)
+        await chair.controller.step_position(0, 1)
+        following = chair.writes[count:]
+        assert following[0][13:17] == b"\x80" * 4
+        assert following[0][18] == 0
+        assert following[0][5] == 0
+        assert following[1][5] == 0x11
+        assert following[2][13] == 0x82
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
 async def test_reconnect_never_resumes_or_releases_on_new_connection(chair):
     def reconnect():
         chair.controller.set_connected(False)
@@ -152,6 +262,9 @@ async def test_reconnect_never_resumes_or_releases_on_new_connection(chair):
         await chair.controller.adjust_lumbar(True)
     assert len(chair.writes) == 2
     assert not chair.controller.busy
+    chair.on_sleep = None
+    await chair.controller.turn_on()
+    assert [packet[5] for packet in chair.writes[2:]] == [0x11]
 
 
 async def test_stale_mid_burst_does_not_write_old_heat(chair):
@@ -224,6 +337,56 @@ async def test_missing_heat_feedback_is_not_reported_as_success(chair):
     with pytest.raises(ControlError, match="did not confirm"):
         await chair.controller.set_heat(False)
     assert len(chair.writes) == 1
+
+
+@pytest.mark.parametrize("kind", ["heat", "massage"])
+@pytest.mark.parametrize("reply", ["none", "wrong", "matching"])
+async def test_off_needs_new_matching_feedback_even_if_already_off(chair, kind, reply):
+    chair.controller.accept_status(status_with(heat=False, massage=0))
+    chair.feedback = False
+    if reply != "none":
+        # A notification can arrive before the transport write returns.
+        chair.on_write = lambda _: chair.controller.accept_status(
+            status_with(heat=reply == "wrong", massage=1 if reply == "wrong" else 0)
+        )
+    action = (
+        chair.controller.set_heat(False) if kind == "heat" else chair.controller.set_massage("Off")
+    )
+    if reply == "matching":
+        await action
+    else:
+        with pytest.raises(ControlError, match="did not confirm"):
+            await action
+    assert len(chair.writes) == 1
+    assert chair.writes[0][5] == 0  # Off neither activates nor retries.
+
+
+@pytest.mark.parametrize("kind", ["heat", "continuous_heat", "massage"])
+async def test_activation_feedback_cannot_confirm_an_already_on_setting(chair, kind):
+    chair.controller.accept_status(status_with(heat=True, massage=1))
+    if kind == "continuous_heat":
+        # A finite massage defers automatic heat renewal, so explicit Heat On
+        # must still confirm its own write before establishing that session.
+        chair.controller.restore_timer_preferences({"heat": True, "massage": False})
+    chair.feedback = False
+    chair.activation_feedback = True
+
+    try:
+        with pytest.raises(ControlError, match="did not confirm"):
+            if kind == "massage":
+                await chair.controller.set_massage("Gentle")
+            else:
+                await chair.controller.set_heat(True)
+
+        assert chair.controller.last_activation["outcome"] == "acknowledged"
+        assert len(chair.writes) == 2
+        assert chair.writes[0][5] == 0x11
+        assert chair.writes[1][5] == 0
+        assert chair.writes[1][17] == 1 and chair.writes[1][19] == 1
+        assert not chair.controller.heat_renewal_diagnostics["active"]
+        assert not chair.controller.massage_renewal_diagnostics["active"]
+    finally:
+        await chair.controller.cancel_active()
 
 
 @pytest.mark.parametrize(

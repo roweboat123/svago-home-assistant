@@ -44,6 +44,7 @@ class MemoryStore:
         self._changed = changed
         self._lock = asyncio.Lock()
         self._profiles: dict[int, MemoryProfile] = {}
+        self._stored_profiles: dict[str, object] | None = None
         self._applied_migrations: frozenset[str] = frozenset()
         self._loaded = False
         self._import_allowed = False
@@ -55,7 +56,7 @@ class MemoryStore:
         return self._profiles.get(slot)
 
     async def async_load(self) -> None:
-        """Load once without writes or chair commands; retain only valid slots."""
+        """Keep raw slots for writes, but expose only validated profiles for recall."""
         async with self._lock:
             if self._loaded or self._closing or self._removed:
                 return
@@ -66,6 +67,9 @@ class MemoryStore:
             )
             data = await self._store.async_load()
             profiles = {}
+            # None means the envelope/metadata could not be interpreted safely.
+            # HA's separately quarantined file remains available for recovery.
+            stored_profiles = {} if data is None else None
             applied_migrations = frozenset()
             # HA can return None after quarantining malformed JSON. Such a file
             # must not silently become new defaults, including on later loads.
@@ -89,6 +93,7 @@ class MemoryStore:
                         _LOGGER.warning("Ignoring invalid Svago memory migrations in %s", self._key)
                     else:
                         applied_migrations = frozenset(migrations)
+                        stored_profiles = data["profiles"]
                     for slot, value in data["profiles"].items():
                         if type(slot) is not str or slot not in ("1", "2", "3"):
                             import_allowed = False
@@ -100,6 +105,7 @@ class MemoryStore:
                             import_allowed = False
                             _LOGGER.warning("Ignoring invalid Svago Memory %s: %s", slot, exc)
             self._profiles = profiles
+            self._stored_profiles = stored_profiles
             self._applied_migrations = applied_migrations
             self._import_allowed = import_allowed
             self._loaded = True
@@ -135,7 +141,7 @@ class MemoryStore:
             raise ValueError("A validated memory profile is required")
         async with self._lock:
             self._check_writable()
-            await self._commit_profiles({**self._profiles, slot: profile})
+            await self._commit_profiles({slot: profile})
 
     async def async_import_missing(self, profiles: Mapping[int, MemoryProfile]) -> None:
         """Fill absent slots only in new or fully validated persisted data."""
@@ -158,7 +164,7 @@ class MemoryStore:
             }
             if not missing:
                 return
-            await self._commit_profiles({**self._profiles, **missing})
+            await self._commit_profiles(missing)
 
     @staticmethod
     def _valid_migration_id(value: object) -> bool:
@@ -183,7 +189,7 @@ class MemoryStore:
             if not self._import_allowed or migration_id in self._applied_migrations:
                 return
             await self._commit_profiles(
-                {**self._profiles, **restored},
+                restored,
                 applied_migrations=self._applied_migrations | {migration_id},
             )
 
@@ -193,14 +199,22 @@ class MemoryStore:
 
     async def _commit_profiles(
         self,
-        updated: dict[int, MemoryProfile],
+        changes: dict[int, MemoryProfile],
         *,
         applied_migrations: frozenset[str] | None = None,
     ) -> None:
-        """Commit under the caller's lock, sharing save/import failure semantics."""
+        """Replace only the selected slots, then publish after disk verification."""
+        if self._stored_profiles is None:
+            raise HomeAssistantError(
+                "The saved memory file has an unrecognized format. "
+                "Restore a known-good backup before saving; no memories were changed."
+            )
         if applied_migrations is None:
             applied_migrations = self._applied_migrations
-        data = {"profiles": {str(key): value.to_dict() for key, value in updated.items()}}
+        stored_profiles = self._stored_profiles | {
+            str(key): value.to_dict() for key, value in changes.items()
+        }
+        data = {"profiles": stored_profiles}
         if applied_migrations:
             data["applied_migrations"] = sorted(applied_migrations)
         try:
@@ -210,9 +224,11 @@ class MemoryStore:
             # Require a successful reload before rebuilding another save.
             self._loaded = False
             raise
-        self._profiles = updated
+        self._profiles.update(changes)
+        self._stored_profiles = stored_profiles
         self._applied_migrations = applied_migrations
-        self._import_allowed = True
+        # Keep automatic migrations disabled while any opaque slot remains.
+        self._import_allowed = len(self._profiles) == len(stored_profiles)
         self._changed()
         if cancelled:
             raise asyncio.CancelledError
@@ -231,6 +247,7 @@ class MemoryStore:
                 return
             cancelled = await self._finish_commit(self._store.async_remove())
             self._profiles = {}
+            self._stored_profiles = None
             self._applied_migrations = frozenset()
             self._removed = True
             self._changed()

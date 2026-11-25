@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.2 — 2026-11-24
+
+Fix issues found and tested during internal testing.
+
+- Preserve unreadable or newer-format memory slots when another slot is saved.
+  Replace an unreadable slot only when explicitly saving that slot, and block
+  writes when the overall saved structure cannot be interpreted safely.
+- Require fresh matching chair feedback after heat and massage commands instead
+  of treating a previously matching state as confirmation.
+- Keep existing Continuous sessions and choices when a memory recall fails
+  before sending its target. Retire renewal workers when target delivery begins.
+- Bound lumbar adjustments by elapsed time, including Bluetooth write delays.
+  Attempt release when a write times out, and require a Stop before the next
+  control if release delivery was uncertain on the same connection.
+
 ## 1.0.1 — 2026-11-22
 
 Fix automatic reconnection after the chair is powered off and back on.
